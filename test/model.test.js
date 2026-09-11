@@ -71,3 +71,21 @@ test("half text", () => {
   assert.equal(halfText(0.5), "½");
   assert.equal(halfText(3), "3");
 });
+
+test("meat, fish and cheese count by weight: 1 oz = 1 Meat", () => {
+  const r = deriveFromLabel({ carb: 0, protein: 26.4, fat: 3.1 }, "starch", { meatByWeightOz: 85 / 28.35 });
+  assert.equal(roundBoxes("meat", r.per.meat), 3);
+  const c = deriveFromLabel({ carb: 0.9, protein: 6.5, fat: 9.4 }, "starch", { meatByWeightOz: 1 });
+  assert.equal(roundBoxes("meat", c.per.meat), 1);
+  assert.equal(roundBoxes("fat", c.per.fat), 1);
+});
+
+test("dairy on the Milk row is sized by calories at its fat level", () => {
+  const two = deriveFromLabel({ carb: 12, protein: 8, fat: 5 }, "milk");
+  assert.equal(roundBoxes("milk", two.per.milk), 1);
+  const greek = deriveFromLabel({ carb: 6.1, protein: 17.5, fat: 0.7 }, "milk");
+  assert.equal(roundBoxes("milk", greek.per.milk), 1);
+  assert.equal(roundBoxes("meat", greek.per.meat), 0);
+  const sweet = deriveFromLabel({ carb: 24, protein: 6, fat: 2 }, "milk"); // flavored low-fat yogurt
+  assert.equal(roundBoxes("milk", sweet.per.milk), 1.5);
+});
