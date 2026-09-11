@@ -6,6 +6,8 @@
 <title>Food Group Tracker — Configure Plan</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="./jspdf.umd.min.js"></script>
+<script src="./sheets.js"></script>
 <style>
   :root{
     --paper:#F6F8F6; --surface:#fff; --ink:#22302B; --muted:#6B7773; --hair:#D6DDD9;
@@ -56,6 +58,15 @@
   #qr img,#qr canvas{border:8px solid #fff;border-radius:8px}
   .status{font-size:13px;color:var(--accent);min-height:18px;margin-top:6px}
   .note{font-size:13px;color:var(--muted)}
+  .layouts{display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px}
+  @media(min-width:560px){.layouts{grid-template-columns:1fr 1fr}}
+  .layout{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--hair);border-radius:10px;padding:10px 12px;background:#fff;cursor:pointer}
+  .layout:has(input:checked){border-color:var(--accent);background:var(--tint)}
+  .layout input{margin-top:3px}
+  .layout b{display:block;font-size:14px;color:var(--deep)}
+  .layout span{font-size:12px;color:var(--muted)}
+  .sheetopts{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+  @media(min-width:560px){.sheetopts{grid-template-columns:1fr 1fr}}
 
   /* ---- phone-frame preview: mirrors the client app ---- */
   .previews{display:grid;grid-template-columns:1fr;gap:16px;margin-top:12px;justify-items:center}
@@ -147,6 +158,21 @@
     <div class="status" id="status"></div>
     <div id="qr"></div>
     <p class="note">The client opens the link once. The app reads the plan and keeps it on their phone.</p>
+  </section>
+
+  <section>
+    <h2>Printable sheets</h2>
+    <p class="hint">The paper version of the same plan, for a client who'd rather not use the app. Choose a layout, then download or print. Rows set to 0 are left off; a variant's extra boxes print dashed.</p>
+    <div class="layouts" id="layouts"></div>
+    <div class="sheetopts">
+      <div><label for="shShow">Which plan to print</label><select class="full" id="shShow"></select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink);margin-top:12px"><input type="checkbox" id="shInterchange" checked style="width:18px;height:18px" /> Include the note that Starch, Fruit, and Milk/Yogurt may be interchanged</label>
+    <div class="actions">
+      <button class="btn" id="shDownload" type="button">Download PDF</button>
+      <button class="btn ghost" id="shPrint" type="button">Print</button>
+    </div>
+    <div class="status" id="shStatus"></div>
   </section>
 
   <section>
@@ -348,7 +374,7 @@ function renderPlan(plan){
     <div class="hdr2" style="margin-top:0"><h3>‹ Plan</h3></div>
     ${cards}${lock}${notes}
     <div class="small">Have a link from your dietitian? Paste it here.</div>
-    <div class="small">Your dietitian set this plan. You can change it here, but changes are yours, not hers. <b style="color:var(--deep)">Edit plan</b></div>
+    <div class="small">Your dietitian set this plan. You can change it here, but changes are yours, not theirs. <b style="color:var(--deep)">Edit plan</b></div>
     <div class="small">Everything is saved on this device only.</div>`;
 }
 
@@ -380,7 +406,58 @@ function update(syncKcal=true){
   if(!qr){ qr=new QRCode(document.getElementById("qr"),{width:180,height:180,colorDark:"#22594E",colorLight:"#F6F8F6",correctLevel:QRCode.CorrectLevel.L}); }
   qr.makeCode(url);
   renderToday(plan); renderPlan(plan);
+  refreshShowOptions(plan);
 }
+
+// ---- printable sheets -----------------------------------------------------------
+const SHEET_ORDER=["original","a","b","c"];
+const SHEET_BLURB={ original:"The original worksheet mechanic: ten day tables with divided cells, all on one page.", a:"Ten day cards with uniform check boxes on one page. Compact.", b:"Large day cards with a notes area, four per page, plus a week-in-review block.", c:"One grid for the whole period: rows are food groups, columns are days." };
+(function initLayouts(){
+  const host=document.getElementById("layouts");
+  host.innerHTML=SHEET_ORDER.map((k,i)=>`<label class="layout"><input type="radio" name="layout" value="${k}" ${i===2?"checked":""}/><div><b>${FGTSheets.LAYOUTS[k].name}</b><span>${SHEET_BLURB[k]}</span></div></label>`).join("");
+})();
+function refreshShowOptions(plan){
+  const sel=document.getElementById("shShow"); const prev=sel.value;
+  const opts=[plan.base,...plan.variants];
+  let html=opts.map((o,i)=>`<option value="p:${i}">${esc(o.name)} (${Number(o.kcal).toLocaleString()} calories)</option>`).join("");
+  plan.variants.forEach((v,i)=>{ html+=`<option value="c:${i}">${esc(plan.base.name)} with ${esc(v.name)} boxes dashed</option>`; });
+  sel.innerHTML=html;
+  const wanted = prev && [...sel.options].some(o=>o.value===prev) ? prev : (plan.variants.length===1 ? "c:0" : "p:0");
+  sel.value=wanted;
+}
+function sheetView(){
+  const plan=currentPlan(), opts=[plan.base,...plan.variants];
+  const sel=document.getElementById("shShow").value||"p:0";
+  const fmtK=n=>Number(n).toLocaleString();
+  let rows, kcalText, legend=null, planLabel, dashedName;
+  if(sel.startsWith("c:")){
+    const v=plan.variants[+sel.slice(2)]||plan.variants[0];
+    rows=GROUPS.map(g=>({...g, solid:plan.base.counts[g.id], dashed:Math.max(0,v.counts[g.id]-plan.base.counts[g.id])}));
+    kcalText=`${fmtK(plan.base.kcal)} calories  ·  ${fmtK(v.kcal)} on ${v.name}`;
+    legend=`= ${v.name} box (${fmtK(v.kcal)} calories). Fill it on those days; leave it empty otherwise.`;
+    planLabel=`${plan.base.name}-${v.name}`; dashedName=v.name;
+  } else {
+    const p=opts[+sel.slice(2)]||plan.base;
+    rows=GROUPS.map(g=>({...g, solid:p.counts[g.id], dashed:0}));
+    kcalText=`${fmtK(p.kcal)} calories / day`; planLabel=p.name;
+  }
+  rows=rows.filter(r=>r.solid+r.dashed>0);
+  return { rows, kcalText, legend, notes:plan.notes, interchange:document.getElementById("shInterchange").checked, planLabel, dashedName };
+}
+function currentLayout(){ return document.querySelector('input[name="layout"]:checked').value; }
+document.getElementById("shDownload").onclick=()=>{
+  const st=document.getElementById("shStatus");
+  try{ const L=currentLayout(), v=sheetView(); if(!v.rows.length){ st.textContent="Every row is 0; nothing to print."; return; }
+       const doc=FGTSheets.build(jspdf.jsPDF, L, v); doc.save(FGTSheets.fileName(L,v)); st.textContent="PDF downloaded."; }
+  catch(e){ st.textContent="Couldn't build the PDF: "+e.message; }
+  setTimeout(()=>st.textContent="",3000);
+};
+document.getElementById("shPrint").onclick=()=>{
+  const st=document.getElementById("shStatus");
+  try{ const L=currentLayout(), v=sheetView(); if(!v.rows.length){ st.textContent="Every row is 0; nothing to print."; return; }
+       const doc=FGTSheets.build(jspdf.jsPDF, L, v); doc.autoPrint(); const w=window.open(doc.output("bloburl"),"_blank"); if(!w) st.textContent="Your browser blocked the print window; allow pop-ups for this page or use Download."; }
+  catch(e){ st.textContent="Couldn't build the PDF: "+e.message; }
+};
 
 // ---- wiring --------------------------------------------------------------------
 state.base.kcal=estimate(state.base.counts);

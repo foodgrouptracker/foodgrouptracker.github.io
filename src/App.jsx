@@ -150,7 +150,7 @@ export default function App() {
   };
 
   // Log a food: add its boxes to today, spilling Starch/Fruit/Milk into one
-  // another when a row is full (her interchange rule), and record the entry.
+  // another when a row is full (the interchange rule), and record the entry.
   const logFood = (food, servings) => {
     const add = Object.fromEntries(GROUPS.map((g) => [g.id, roundBoxes(g.id, (food.per[g.id] || 0) * servings)]));
     const result = applyExchanges(counts, current.counts, add);

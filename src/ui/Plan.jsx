@@ -100,7 +100,7 @@ export function PlanScreen({ plan, onApply, onBack }) {
             </div>
 
             <div className="mt-5 pt-4 text-xs" style={{ borderTop: `1px solid ${T.hair}`, color: T.muted }}>
-              Your dietitian set this plan. You can change it here, but changes are yours, not hers.
+              Your dietitian set this plan. You can change it here, but changes are yours, not theirs.
               <div className="mt-2">
                 <button onClick={startEdit} className="font-bold focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
                   Edit plan

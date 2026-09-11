@@ -13,7 +13,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["apple-touch-icon.png", "configure/index.html"],
+      includeAssets: ["apple-touch-icon.png"],
       manifest: {
         name: "Food Group Tracker",
         short_name: "Food Group Tracker",
@@ -31,6 +31,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],
+        globIgnores: ["configure/**"],
         navigateFallbackDenylist: [/\/configure\//],
       },
     }),
