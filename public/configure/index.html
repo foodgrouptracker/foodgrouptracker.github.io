@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Food Group Tracker — Configure Plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --paper:#F6F8F6; --surface:#fff; --ink:#22302B; --muted:#6B7773; --hair:#D6DDD9;
+    --accent:#2F7D6D; --deep:#22594E; --tint:#E3EFEA;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif;line-height:1.4}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 20px 48px}
+  h1{margin:0;font-size:26px;color:var(--deep);line-height:1.15}
+  .lede{margin:6px 0 0;color:var(--muted);font-size:14px;max-width:62ch}
+  section{background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:16px;margin-top:16px}
+  h2{margin:0 0 4px;font-size:16px;color:var(--deep)}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 12px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input[type=text],input[type=number],input[type=date],select,textarea{
+    font:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--hair);border-radius:8px;background:#fff;color:var(--ink)
+  }
+  input[type=text],input[type=number],textarea,select.full{width:100%}
+  input:focus,textarea:focus,button:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+  textarea{min-height:70px;resize:vertical}
+  .two{display:grid;grid-template-columns:1fr 170px;gap:12px}
+  .est{font-size:12px;color:var(--muted);margin-top:4px}
+  .rows{margin-top:8px;border-top:1px solid var(--hair)}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--hair);gap:8px}
+  .row .name{font-size:15px}
+  .row .name .swap{color:var(--accent)}
+  .step{display:inline-flex;align-items:center;border:1px solid var(--hair);border-radius:999px;overflow:hidden;background:#fff}
+  .step button{width:38px;height:36px;border:0;background:transparent;font:inherit;font-size:20px;color:var(--deep);cursor:pointer}
+  .step button:disabled{color:var(--hair);cursor:default}
+  .step input{width:44px;height:36px;border:0;border-radius:0;text-align:center;font:inherit;font-weight:700;font-size:15px;padding:0;-moz-appearance:textfield}
+  .step input::-webkit-inner-spin-button,.step input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .assume{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:12px;font-size:13px;color:var(--muted)}
+  .assume select{font-size:13px;padding:6px 8px}
+  .variant{border:1px solid var(--hair);border-radius:10px;padding:12px;margin-top:12px;background:var(--paper)}
+  .variant .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .sched{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;font-size:14px}
+  .sched input[type=number]{width:70px}
+  .days{display:flex;gap:6px;flex-wrap:wrap}
+  .day{font:inherit;font-size:13px;width:40px;height:34px;border-radius:999px;border:1px solid var(--hair);background:#fff;color:var(--muted);cursor:pointer}
+  .day[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  .btn{font:inherit;font-size:14px;font-weight:700;padding:10px 16px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn.ghost{background:transparent;color:var(--deep)}
+  .btn.small{padding:7px 12px;font-size:13px}
+  .btn.link{border:0;background:transparent;color:var(--muted);padding:6px 8px;font-weight:400}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+  .out{font-size:12px;word-break:break-all;background:var(--paper);border:1px solid var(--hair);border-radius:8px;padding:10px;color:var(--muted);max-height:96px;overflow:auto}
+  #qr{margin-top:12px;display:flex;justify-content:center}
+  #qr img,#qr canvas{border:8px solid #fff;border-radius:8px}
+  .status{font-size:13px;color:var(--accent);min-height:18px;margin-top:6px}
+  .note{font-size:13px;color:var(--muted)}
+
+  /* ---- phone-frame preview: mirrors the client app ---- */
+  .previews{display:grid;grid-template-columns:1fr;gap:16px;margin-top:12px;justify-items:center}
+  @media(min-width:700px){.previews{grid-template-columns:1fr 1fr}}
+  .phone{width:340px;background:#1b1f1e;border-radius:34px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+  .screen{background:var(--paper);border-radius:24px;padding:14px 16px 10px;height:600px;display:flex;flex-direction:column;font-size:13px;overflow:hidden}
+  .screen.scroll{overflow-y:auto}
+  .screen .hdr1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .screen .date{font-size:11px;color:var(--muted)}
+  .screen .kcal{font-size:11px;font-weight:700;background:var(--accent);color:#fff;border-radius:999px;padding:3px 8px 3px 10px;white-space:nowrap}
+  .screen .hdr2{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px}
+  .screen h3{margin:0;font-size:22px;color:var(--deep)}
+  .seg{display:inline-flex;background:var(--tint);border-radius:999px;padding:2px}
+  .seg button{font:inherit;font-size:11px;border:0;border-radius:999px;padding:5px 9px;background:transparent;color:var(--muted);cursor:pointer}
+  .seg button.on{background:#fff;color:var(--deep);font-weight:700;box-shadow:0 1px 2px rgba(34,48,43,.12)}
+  .screen select.segsel{font-size:11px;padding:5px 9px;border:0;border-radius:999px;background:var(--tint);color:var(--deep);font-weight:700}
+  .screen .grows{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;margin-top:6px;overflow:hidden}
+  .screen .g{padding:6px 0;border-top:1px solid var(--hair)}
+  .screen .g:first-child{border-top:0}
+  .screen .g .t{display:flex;justify-content:space-between;align-items:baseline}
+  .screen .g .t b{font-size:13px}
+  .screen .g .t span{font-size:11px;color:var(--muted)}
+  .screen .g .swap{color:var(--accent)}
+  .screen .line{display:flex;gap:4px;margin-top:4px}
+  .screen .bx{border:1.5px solid var(--hair);border-radius:6px;background:#fff}
+  .screen .bx.extra{border-style:dashed;border-color:var(--accent)}
+  .screen .foot{font-size:10px;color:var(--muted);border-top:1px solid var(--hair);padding-top:6px;margin-top:4px}
+  .screen .card{background:#fff;border:1px solid var(--hair);border-radius:8px;padding:10px;margin-top:10px}
+  .screen .card .ct{display:flex;justify-content:space-between;align-items:baseline}
+  .screen .card .ct b{color:var(--deep)}
+  .screen .card .sc{font-size:10px;color:var(--muted);margin-top:2px}
+  .screen .card .pr{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-top:1px solid var(--hair);font-size:11px}
+  .screen .card .pr .mini{display:flex;gap:2px;align-items:center;flex-wrap:wrap;justify-content:flex-end;max-width:150px}
+  .screen .card .pr .mini i{display:inline-block;width:9px;height:9px;border:1.5px solid #9AA6A1;border-radius:2px;background:#fff}
+  .screen .card .pr .mini i.extra{border-style:dashed;border-color:var(--accent)}
+  .screen .card .pr .n{color:var(--muted);margin-right:4px}
+  .screen .notes{background:var(--tint);border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px}
+  .screen .notes b{display:block;font-size:10px;color:var(--deep);margin-bottom:2px}
+  .screen .small{font-size:10px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Food Group Tracker: Configure Plan</h1>
+  <p class="lede">Set a client's plan, then send them the link or show them the QR code. Nothing is saved anywhere; the whole plan travels inside the link.</p>
+
+  <section>
+    <h2>Standard plan</h2>
+    <p class="hint">The everyday plan. One box = one serving from the food lists. Calories are estimated from the boxes; you can type over the estimate. Set a row to 0 to leave that food group out of the client's tracker entirely.</p>
+    <div class="two">
+      <div><label for="bName">Plan name</label><input type="text" id="bName" value="Standard" maxlength="24" /></div>
+      <div><label for="bKcal">Calories</label><input type="number" id="bKcal" min="0" step="50" /><div class="est" id="bEst"></div></div>
+    </div>
+    <div class="rows" id="baseRows"></div>
+    <div class="assume">
+      <span>Calorie estimate assumes</span>
+      <span>Milk: <select id="aMilk"><option value="100">fat-free or 1% (100)</option><option value="120">2% (120)</option><option value="160">whole (160)</option></select></span>
+      <span>Protein: <select id="aMeat"><option value="45">lean (45)</option><option value="75" selected>medium-fat (75)</option><option value="100">high-fat (100)</option></select></span>
+      <span>Starch 80 · Fruit 60 · Vegetable 25 · Fat 45</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Variants</h2>
+    <p class="hint">Optional. A different set of counts for certain days, e.g. "Active day". Boxes above the standard plan appear dashed. With a schedule, the app selects the variant on those days; the client can still switch.</p>
+    <div id="variants"></div>
+    <div class="actions"><button class="btn ghost small" id="addVariant" type="button">Add a variant</button></div>
+  </section>
+
+  <section>
+    <h2>Logging</h2>
+    <p class="hint">By default the client can check a box by tapping it or by logging a food; every tap still appears in their day's log. Turn this on for a client you want keeping a food record.</p>
+    <label style="display:flex;align-items:center;gap:10px;font-size:15px;color:var(--ink);margin:0"><input type="checkbox" id="requireFoods" style="width:18px;height:18px" /> Boxes can only be checked by logging a food</label>
+  </section>
+
+  <section>
+    <h2>Notes for the client</h2>
+    <p class="hint">Anything that isn't a count. Shown on their Plan screen.</p>
+    <textarea id="notes" maxlength="300" placeholder="e.g. Aim for at least one vegetable box at lunch."></textarea>
+  </section>
+
+  <section>
+    <h2>Link</h2>
+    <div class="out" id="link"></div>
+    <div class="actions">
+      <button class="btn" id="copy" type="button">Copy link</button>
+      <a class="btn ghost" id="sms" href="#">Text link</a>
+    </div>
+    <div class="status" id="status"></div>
+    <div id="qr"></div>
+    <p class="note">The client opens the link once. The app reads the plan and keeps it on their phone.</p>
+  </section>
+
+  <section>
+    <h2>What the client sees</h2>
+    <p class="hint">Left: their Today screen before any boxes are checked. Right: their Plan screen. Tap a variant name on the left to preview that day.</p>
+    <div class="previews">
+      <div class="phone"><div class="screen" id="pvToday"></div></div>
+      <div class="phone"><div class="screen scroll" id="pvPlan"></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+// The client app is one level up from this page (…/configure/ → …/).
+const APP_URL = location.href.replace(/[#?].*$/,"").replace(/configure\/?(index\.html)?$/,"");
+
+const GROUPS = [
+  {id:"starch", label:"Starch / Carbohydrate", swap:true},
+  {id:"fruit",  label:"Fruits", swap:true},
+  {id:"milk",   label:"Milk / Yogurt", swap:true},
+  {id:"veg",    label:"Vegetables"},
+  {id:"meat",   label:"Meat / Cheese / Eggs"},
+  {id:"fat",    label:"Fats"},
+  {id:"water",  label:"Water", unit:"1 cup"},
+];
+const DEFAULT = {starch:8, fruit:3, milk:3, veg:3, meat:8, fat:6, water:8};
+const DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+const DAYS_LONG = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const HARD_MAX = 30;      // typo guard only
+const PER_LINE = 10;      // boxes per line before wrapping (matches the app)
+const KCAL_FIXED = {starch:80, fruit:60, veg:25, fat:45, water:0};
+
+const state = {
+  assume:{milk:100, meat:75},
+  base:{name:"Standard", kcal:0, counts:{...DEFAULT}},
+  variants:[],
+  notes:"",
+  requireFoods:false
+};
+let previewVariant = 0;
+
+function estimate(counts){
+  const k={...KCAL_FIXED, milk:state.assume.milk, meat:state.assume.meat};
+  const sum=GROUPS.reduce((s,g)=>s+counts[g.id]*k[g.id],0);
+  return Math.round(sum/50)*50;
+}
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function encodePlan(plan){
+  const bytes=new TextEncoder().encode(JSON.stringify(plan));
+  let bin=""; bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function clampN(v){ v=Math.round(Number(v)||0); return Math.max(0,Math.min(HARD_MAX,v)); }
+function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+function schedText(s){
+  if(!s) return "";
+  if(s.type==="weekly") return s.days.length ? "Applies automatically: "+s.days.map(d=>DAYS_LONG[d]).join(", ") : "";
+  if(s.type==="every")  return `Applies automatically every ${ordinal(s.n)} day, starting ${new Date(s.start+"T12:00").toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
+  if(s.type==="perweek") return `Up to ${s.n} day${s.n===1?"":"s"} a week, your choice`;
+  return "";
+}
+
+// ---- stepper rows -------------------------------------------------------------
+function rowsInto(container, plan, onChange){
+  const counts=plan.counts;
+  container.innerHTML="";
+  GROUPS.forEach(g=>{
+    const row=document.createElement("div"); row.className="row";
+    const name=document.createElement("div"); name.className="name";
+    name.innerHTML=g.label+(g.unit?` <span style="color:var(--muted)">(${g.unit})</span>`:"")+(g.swap?' <span class="swap">*</span>':"");
+    const step=document.createElement("div"); step.className="step";
+    const minus=document.createElement("button"); minus.type="button"; minus.textContent="−"; minus.setAttribute("aria-label","Fewer "+g.label);
+    const inp=document.createElement("input"); inp.type="number"; inp.inputMode="numeric"; inp.min=0; inp.max=HARD_MAX; inp.setAttribute("aria-label",g.label+" servings");
+    const plus=document.createElement("button"); plus.type="button"; plus.textContent="+"; plus.setAttribute("aria-label","More "+g.label);
+    const sync=()=>{ inp.value=counts[g.id]; minus.disabled=counts[g.id]<=0; plus.disabled=counts[g.id]>=HARD_MAX; };
+    const changed=()=>{ plan.kcal=estimate(counts); sync(); onChange(); };   // boxes → calories
+    minus.onclick=()=>{ counts[g.id]=clampN(counts[g.id]-1); changed(); };
+    plus.onclick =()=>{ counts[g.id]=clampN(counts[g.id]+1); changed(); };
+    inp.onchange =()=>{ counts[g.id]=clampN(inp.value); changed(); };
+    sync(); step.append(minus,inp,plus); row.append(name,step); container.append(row);
+  });
+}
+
+function renderVariants(){
+  const host=document.getElementById("variants"); host.innerHTML="";
+  state.variants.forEach((v,i)=>{
+    const s=v.schedule;
+    const card=document.createElement("div"); card.className="variant";
+    card.innerHTML=`
+      <div class="head"><h2 style="font-size:15px;margin:0">Variant ${i+1}</h2>
+        <button class="btn link" type="button" data-remove="${i}">Remove</button></div>
+      <div class="two">
+        <div><label>Variant name</label><input type="text" data-vname="${i}" value="${esc(v.name)}" maxlength="24" placeholder="e.g. Active day" /></div>
+        <div><label>Calories</label><input type="number" data-vkcal="${i}" value="${v.kcal}" min="0" step="50" /><div class="est" data-vest="${i}"></div></div>
+      </div>
+      <label>Schedule (optional)</label>
+      <select class="full" data-vstype="${i}">
+        <option value="" ${!s?"selected":""}>None — the client switches to it by hand</option>
+        <option value="weekly" ${s&&s.type==="weekly"?"selected":""}>Certain days of the week</option>
+        <option value="every" ${s&&s.type==="every"?"selected":""}>Every N days</option>
+        <option value="perweek" ${s&&s.type==="perweek"?"selected":""}>N days a week, client chooses which</option>
+      </select>
+      <div class="sched" data-vsopts="${i}"></div>
+      <div class="rows" data-vrows="${i}"></div>`;
+    host.append(card);
+    rowsInto(card.querySelector(`[data-vrows="${i}"]`), v, update);
+    renderSchedOpts(i, card.querySelector(`[data-vsopts="${i}"]`));
+  });
+  host.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{ state.variants.splice(+b.dataset.remove,1); previewVariant=0; renderVariants(); update(); });
+  host.querySelectorAll("[data-vname]").forEach(inp=>inp.oninput=()=>{ state.variants[+inp.dataset.vname].name=inp.value; update(); });
+  host.querySelectorAll("[data-vkcal]").forEach(inp=>inp.oninput=()=>{ state.variants[+inp.dataset.vkcal].kcal=Math.max(0,+inp.value||0); update(false); });
+  host.querySelectorAll("[data-vstype]").forEach(sel=>sel.onchange=()=>{
+    const v=state.variants[+sel.dataset.vstype]; const t=sel.value;
+    v.schedule = !t ? null : t==="weekly" ? {type:"weekly",days:[]} : t==="every" ? {type:"every",n:3,start:todayISO()} : {type:"perweek",n:2};
+    renderSchedOpts(+sel.dataset.vstype, host.querySelector(`[data-vsopts="${sel.dataset.vstype}"]`)); update();
+  });
+}
+function renderSchedOpts(i, host){
+  const v=state.variants[i], s=v.schedule; host.innerHTML="";
+  if(!s) return;
+  if(s.type==="weekly"){
+    host.innerHTML=`<div class="days">${DAYS.map((d,di)=>`<button type="button" class="day" data-day="${di}" aria-pressed="${s.days.includes(di)}">${d}</button>`).join("")}</div>`;
+    host.querySelectorAll(".day").forEach(b=>b.onclick=()=>{
+      const d=+b.dataset.day, set=new Set(s.days); set.has(d)?set.delete(d):set.add(d);
+      s.days=[...set].sort(); b.setAttribute("aria-pressed",set.has(d)); update();
+    });
+  } else if(s.type==="every"){
+    host.innerHTML=`Every <input type="number" min="2" max="14" value="${s.n}" aria-label="Number of days" /> days, starting <input type="date" value="${s.start}" aria-label="Start date" />`;
+    const [n,start]=host.querySelectorAll("input");
+    n.onchange=()=>{ s.n=Math.max(2,Math.min(14,Math.round(+n.value)||3)); n.value=s.n; update(); };
+    start.onchange=()=>{ if(start.value) s.start=start.value; update(); };
+  } else if(s.type==="perweek"){
+    host.innerHTML=`<input type="number" min="1" max="6" value="${s.n}" aria-label="Days per week" /> days a week — the app counts how many the client has used.`;
+    const n=host.querySelector("input");
+    n.onchange=()=>{ s.n=Math.max(1,Math.min(6,Math.round(+n.value)||2)); n.value=s.n; update(); };
+  }
+}
+
+// ---- preview -------------------------------------------------------------------
+function boxesHTML(n, base, size){
+  let html="";
+  for(let start=0; start<n; start+=PER_LINE){
+    const end=Math.min(n,start+PER_LINE);
+    html+=`<div class="line">`+Array.from({length:end-start},(_,k)=>{const i=start+k;return `<span class="bx${i>=base?" extra":""}" style="width:${size}px;height:${size}px"></span>`;}).join("")+`</div>`;
+  }
+  return html||`<div class="line" style="height:${size}px"></div>`;
+}
+function renderToday(plan){
+  const opts=[plan.base,...plan.variants];
+  if(previewVariant>=opts.length) previewVariant=0;
+  const cur=opts[previewVariant];
+  const maxBoxes=Math.max(1,...opts.flatMap(o=>Object.values(o.counts)));
+  const perLine=Math.min(maxBoxes,PER_LINE);
+  const innerW=340-24-32;
+  const size=Math.max(14,Math.min(28,Math.floor((innerW-(perLine-1)*4)/perLine)));
+  const today=new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  let seg="";
+  if(plan.variants.length){
+    seg = opts.length<=3
+      ? `<div class="seg">${opts.map((o,i)=>`<button type="button" data-pv="${i}" class="${i===previewVariant?"on":""}">${esc(o.name)}</button>`).join("")}</div>`
+      : `<select class="segsel" id="pvSel">${opts.map((o,i)=>`<option value="${i}" ${i===previewVariant?"selected":""}>${esc(o.name)}</option>`).join("")}</select>`;
+  }
+  const rows=GROUPS.filter(g=>cur.counts[g.id]>0).map(g=>{
+    const n=cur.counts[g.id], b=plan.base.counts[g.id];
+    return `<div class="g"><div class="t"><b>${g.label}${g.unit?` <span style="font-weight:400">(${g.unit})</span>`:""}${g.swap?' <span class="swap">*</span>':""}</b><span>${n===0?"":n+" left"}</span></div>${boxesHTML(n,b,size)}</div>`;
+  }).join("");
+  const dashed = plan.variants.length ? ` Dashed boxes: ${esc(plan.variants.map(v=>v.name).join(" / "))}.` : "";
+  const perweek = plan.variants.filter(v=>v.schedule&&v.schedule.type==="perweek").map(v=>`${esc(v.name)}: 0 of ${v.schedule.n} days used this week.`).join(" ");
+  document.getElementById("pvToday").innerHTML=`
+    <div class="hdr1"><span class="date">${today}</span><span class="kcal">${Number(cur.kcal).toLocaleString()} calories ›</span></div>
+    <div class="hdr2"><h3>Today</h3>${seg}</div>
+    <div class="grows">${rows}</div>
+    <div class="foot"><span class="swap">*</span> Starch, Fruit, and Milk/Yogurt boxes can stand in for one another.${dashed}${plan.requireFoods?" Boxes are checked by logging foods.":""}${perweek?" "+perweek:""}</div>`;
+  document.querySelectorAll("[data-pv]").forEach(b=>b.onclick=()=>{ previewVariant=+b.dataset.pv; renderToday(plan); });
+  const sel=document.getElementById("pvSel"); if(sel) sel.onchange=()=>{ previewVariant=+sel.value; renderToday(plan); };
+  // Rows keep the size they would have with all seven present; hidden rows leave their space.
+  const grows=document.querySelector("#pvToday .grows");
+  const gs=[...grows.querySelectorAll(".g")];
+  const oneLine=(gs.find(g=>g.querySelectorAll(".line").length===1)||{}).offsetHeight || (16+4+size+12);
+  const sum=gs.reduce((a,g)=>a+g.offsetHeight,0)+(GROUPS.length-gs.length)*oneLine;
+  const slack=Math.max(0,(grows.clientHeight-sum-(GROUPS.length-1))/GROUPS.length);
+  gs.forEach(g=>{ g.style.paddingTop=(6+slack/2)+"px"; g.style.paddingBottom=(6+slack/2)+"px"; });
+}
+function renderPlan(plan){
+  const opts=[plan.base,...plan.variants];
+  const cards=opts.map((p,pi)=>{
+    const st=pi>0?schedText(p.schedule):"";
+    const rows=GROUPS.filter(g=>p.counts[g.id]>0).map(g=>{
+      const n=p.counts[g.id], b=plan.base.counts[g.id];
+      const mini=Array.from({length:n},(_,i)=>`<i class="${i>=b?"extra":""}"></i>`).join("");
+      return `<div class="pr"><span>${g.label}${g.unit?` (${g.unit})`:""}</span><span class="mini"><span class="n">${n}</span>${mini}</span></div>`;
+    }).join("");
+    return `<div class="card"><div class="ct"><b>${esc(p.name)}</b><span class="kcal">${Number(p.kcal).toLocaleString()} calories</span></div>${st?`<div class="sc">${st}</div>`:""}${rows}</div>`;
+  }).join("");
+  const notes=plan.notes?`<div class="notes"><b>From your dietitian</b>${esc(plan.notes)}</div>`:"";
+  const lock=plan.requireFoods?`<div class="small">Boxes on this plan are checked by logging foods, not by tapping.</div>`:"";
+  document.getElementById("pvPlan").innerHTML=`
+    <div class="hdr2" style="margin-top:0"><h3>‹ Plan</h3></div>
+    ${cards}${lock}${notes}
+    <div class="small">Have a link from your dietitian? Paste it here.</div>
+    <div class="small">Your dietitian set this plan. You can change it here, but changes are yours, not hers. <b style="color:var(--deep)">Edit plan</b></div>
+    <div class="small">Everything is saved on this device only.</div>`;
+}
+
+// ---- output --------------------------------------------------------------------
+let qr=null;
+function currentPlan(){
+  return { v:1,
+    base:{ name:state.base.name.trim()||"Standard", kcal:state.base.kcal, counts:{...state.base.counts} },
+    variants: state.variants.filter(v=>v.name.trim()).map(v=>{
+      const o={ name:v.name.trim(), kcal:v.kcal, counts:{...v.counts} };
+      if(v.schedule && !(v.schedule.type==="weekly" && !v.schedule.days.length)) o.schedule={...v.schedule};
+      return o;
+    }),
+    notes: state.notes.trim(),
+    ...(state.requireFoods?{requireFoods:true}:{}) };
+}
+function refreshKcalFields(){
+  document.getElementById("bKcal").value=state.base.kcal;
+  document.getElementById("bEst").textContent="Estimated from boxes: "+estimate(state.base.counts).toLocaleString();
+  document.querySelectorAll("[data-vkcal]").forEach(inp=>{ inp.value=state.variants[+inp.dataset.vkcal].kcal; });
+  document.querySelectorAll("[data-vest]").forEach(el=>{ el.textContent="Estimated from boxes: "+estimate(state.variants[+el.dataset.vest].counts).toLocaleString(); });
+}
+function update(syncKcal=true){
+  if(syncKcal) refreshKcalFields();
+  const plan=currentPlan();
+  const url=APP_URL.replace(/#.*$/,"")+"#plan="+encodePlan(plan);
+  document.getElementById("link").textContent=url;
+  document.getElementById("sms").href="sms:?&body="+encodeURIComponent("Your food group tracker plan: "+url);
+  if(!qr){ qr=new QRCode(document.getElementById("qr"),{width:180,height:180,colorDark:"#22594E",colorLight:"#F6F8F6",correctLevel:QRCode.CorrectLevel.L}); }
+  qr.makeCode(url);
+  renderToday(plan); renderPlan(plan);
+}
+
+// ---- wiring --------------------------------------------------------------------
+state.base.kcal=estimate(state.base.counts);
+rowsInto(document.getElementById("baseRows"), state.base, update);
+document.getElementById("bName").oninput=e=>{ state.base.name=e.target.value; update(); };
+document.getElementById("bKcal").oninput=e=>{ state.base.kcal=Math.max(0,+e.target.value||0); update(false); };  // manual edit: calories only
+document.getElementById("aMilk").onchange=e=>{ state.assume.milk=+e.target.value; reestimateAll(); };
+document.getElementById("aMeat").onchange=e=>{ state.assume.meat=+e.target.value; reestimateAll(); };
+function reestimateAll(){ state.base.kcal=estimate(state.base.counts); state.variants.forEach(v=>v.kcal=estimate(v.counts)); update(); }
+document.getElementById("notes").oninput=e=>{ state.notes=e.target.value; update(); };
+document.getElementById("requireFoods").onchange=e=>{ state.requireFoods=e.target.checked; update(); };
+document.getElementById("addVariant").onclick=()=>{
+  const counts={...state.base.counts};
+  state.variants.push({ name: state.variants.length?"":"Active day", kcal:estimate(counts), counts, schedule:null });
+  renderVariants(); update();
+};
+document.getElementById("copy").onclick=async()=>{
+  const s=document.getElementById("status");
+  try{ await navigator.clipboard.writeText(document.getElementById("link").textContent); s.textContent="Link copied."; }
+  catch{ s.textContent="Copy failed. Select the link text and copy it by hand."; }
+  setTimeout(()=>s.textContent="",2500);
+};
+update();
+</script>
+</body>
+</html>
