@@ -11,5 +11,5 @@ export const T = {
   over: "#D6B25E",        // beyond-plan box fill: warm, informative, not alarming
   overBorder: "#C9A25A",
   overInk: "#7D6420",
-  font: "'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  font: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif",
 };

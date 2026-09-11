@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 html, body, #root { height: 100%; margin: 0; background: #F6F8F6; }
-.fgt, .fgt * { -webkit-tap-highlight-color: transparent; }
+.fgt, .fgt * { -webkit-tap-highlight-color: transparent; font-feature-settings: "tnum" 1, "cv11" 1; }
 .fgt-noselect, .fgt-noselect * { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 /* 16px minimum stops iOS Safari zooming into fields */
 .fgt input, .fgt select, .fgt textarea { font-size: 16px !important; }
