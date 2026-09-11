@@ -6,6 +6,7 @@
      rows: [{id,label,unit,swap,solid,dashed}],   // rows with 0 boxes already removed
      kcalText: "2,000 calories",                  // badge
      legend: "…" | null,                          // shown when dashed boxes exist
+     scheduleLine: "…" | null,                    // variant sheet: when the variant applies
      notes: "…" | "",
      interchange: true|false,
      planLabel: "Standard"                        // for file names
@@ -64,19 +65,22 @@
     d.roundedRect(pw - M - bw, top + 2, bw, 20, 10, 10, "F");
     text(d, pw - M - bw / 2, top + 15.5, view.kcalText, { size: 8.5, bold: true, color: C.white, align: "center" });
     text(d, M, top + 47, TAGLINE, { size: 7.6 });
+    let y = top + 47;
     if (view.legend) {
-      boxes(d, M + 1, top + 55.5, 1, 8, 0, 0);
-      text(d, M + 13, top + 58.3, view.legend, { size: 7.6 });
-    } else {
-      const y = top + 58.3;
-      stroke(d, C.box);
-      d.setLineWidth(0.5);
-      text(d, M, y, "Client", { size: 7.6, bold: true, color: C.muted });
-      d.line(M + 30, y + 1.5, M + 210, y + 1.5);
-      text(d, M + 228, y, "Start date", { size: 7.6, bold: true, color: C.muted });
-      d.line(M + 272, y + 1.5, M + 380, y + 1.5);
+      y += 11.3;
+      boxes(d, M + 1, y - 2.8, 1, 8, 0, 0);
+      text(d, M + 13, y, view.legend, { size: 7.6 });
     }
-    let ruleY = top + 66;
+    if (view.scheduleLine) {
+      y += 11.3;
+      text(d, M, y, view.scheduleLine, { size: 7.6 });
+    }
+    y += 11.3;
+    stroke(d, C.box);
+    d.setLineWidth(0.5);
+    text(d, M, y, "Start date", { size: 7.6, bold: true, color: C.muted });
+    d.line(M + 44, y + 1.5, M + 190, y + 1.5);
+    let ruleY = y + 7.7;
     if (view.notes) {
       text(d, M, ruleY + 8, "Notes: " + view.notes, { size: 7.4, color: C.muted });
       ruleY += 12;

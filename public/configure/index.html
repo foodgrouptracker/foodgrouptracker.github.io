@@ -149,6 +149,15 @@
   </section>
 
   <section>
+    <h2>What the client sees</h2>
+    <p class="hint">Left: their Today screen before any boxes are checked. Right: their Plan screen. Tap a variant name on the left to preview that day.</p>
+    <div class="previews">
+      <div class="phone"><div class="screen" id="pvToday"></div></div>
+      <div class="phone"><div class="screen scroll" id="pvPlan"></div></div>
+    </div>
+  </section>
+
+  <section>
     <h2>Link</h2>
     <div class="out" id="link"></div>
     <div class="actions">
@@ -175,14 +184,6 @@
     <div class="status" id="shStatus"></div>
   </section>
 
-  <section>
-    <h2>What the client sees</h2>
-    <p class="hint">Left: their Today screen before any boxes are checked. Right: their Plan screen. Tap a variant name on the left to preview that day.</p>
-    <div class="previews">
-      <div class="phone"><div class="screen" id="pvToday"></div></div>
-      <div class="phone"><div class="screen scroll" id="pvPlan"></div></div>
-    </div>
-  </section>
 </div>
 
 <script>
@@ -233,6 +234,14 @@ function schedText(s){
   if(s.type==="weekly") return s.days.length ? "Applies automatically: "+s.days.map(d=>DAYS_LONG[d]).join(", ") : "";
   if(s.type==="every")  return `Applies automatically every ${ordinal(s.n)} day, starting ${new Date(s.start+"T12:00").toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
   if(s.type==="perweek") return `Up to ${s.n} day${s.n===1?"":"s"} a week, your choice`;
+  return "";
+}
+// short form for the printed sheets
+function schedShort(s){
+  if(!s) return "";
+  if(s.type==="weekly") return s.days.length ? s.days.map(d=>DAYS_LONG[d]).join(", ") : "";
+  if(s.type==="every")  return `every ${ordinal(s.n)} day from ${new Date(s.start+"T12:00").toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
+  if(s.type==="perweek") return `up to ${s.n} day${s.n===1?"":"s"} a week, your choice`;
   return "";
 }
 
@@ -429,20 +438,22 @@ function sheetView(){
   const plan=currentPlan(), opts=[plan.base,...plan.variants];
   const sel=document.getElementById("shShow").value||"p:0";
   const fmtK=n=>Number(n).toLocaleString();
-  let rows, kcalText, legend=null, planLabel, dashedName;
+  let rows, kcalText, legend=null, scheduleLine=null, planLabel, dashedName;
   if(sel.startsWith("c:")){
     const v=plan.variants[+sel.slice(2)]||plan.variants[0];
+    const sc=schedShort(v.schedule);
     rows=GROUPS.map(g=>({...g, solid:plan.base.counts[g.id], dashed:Math.max(0,v.counts[g.id]-plan.base.counts[g.id])}));
     kcalText=`${fmtK(plan.base.kcal)} calories  ·  ${fmtK(v.kcal)} on ${v.name}`;
-    legend=`= ${v.name} box (${fmtK(v.kcal)} calories). Fill it on those days; leave it empty otherwise.`;
+    legend=`= ${v.name} box (${fmtK(v.kcal)} calories)${sc?"  ·  "+sc:""}. Fill it on those days; leave it empty otherwise.`;
     planLabel=`${plan.base.name}-${v.name}`; dashedName=v.name;
   } else {
-    const p=opts[+sel.slice(2)]||plan.base;
+    const idx=+sel.slice(2), p=opts[idx]||plan.base;
     rows=GROUPS.map(g=>({...g, solid:p.counts[g.id], dashed:0}));
     kcalText=`${fmtK(p.kcal)} calories / day`; planLabel=p.name;
+    if(idx>0){ const sc=schedShort(p.schedule); if(sc) scheduleLine=`${p.name} plan  ·  applies ${sc}`; }
   }
   rows=rows.filter(r=>r.solid+r.dashed>0);
-  return { rows, kcalText, legend, notes:plan.notes, interchange:document.getElementById("shInterchange").checked, planLabel, dashedName };
+  return { rows, kcalText, legend, scheduleLine, notes:plan.notes, interchange:document.getElementById("shInterchange").checked, planLabel, dashedName };
 }
 function currentLayout(){ return document.querySelector('input[name="layout"]:checked').value; }
 document.getElementById("shDownload").onclick=()=>{
