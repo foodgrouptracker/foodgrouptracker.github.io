@@ -3,8 +3,15 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-// On GitHub Pages the app lives under /<repo>/ ; the deploy workflow sets VITE_BASE.
-const base = process.env.VITE_BASE || "/";
+import fs from "node:fs";
+
+// Where does the app live?
+//  - a repo named <owner>.github.io, or a custom domain (public/CNAME present): the root, "/"
+//  - any other GitHub Pages repo: under /<repo>/ (the deploy workflow passes VITE_BASE)
+const hasCustomDomain = fs.existsSync(new URL("./public/CNAME", import.meta.url));
+const envBase = process.env.VITE_BASE || "/";
+const isUserOrOrgSite = /\.github\.io\/$/i.test(envBase);
+const base = hasCustomDomain || isUserOrOrgSite ? "/" : envBase;
 
 export default defineConfig({
   base,
