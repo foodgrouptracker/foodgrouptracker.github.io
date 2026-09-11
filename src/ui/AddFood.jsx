@@ -529,6 +529,12 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
             {scan?.busy ? `${scan.status}${scan.progress ? ` ${Math.round(scan.progress * 100)}%` : "…"}` : scan?.preview ? "Scan again" : "Scan the Nutrition Facts label"}
             <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={!!scan?.busy} onChange={(e) => onPhoto(e.target.files?.[0])} />
           </label>
+          {!scan?.busy && (
+            <label className="block text-center text-xs mt-2 cursor-pointer focus-within:ring-2" style={{ color: T.accentDeep }}>
+              <span className="font-bold">or choose a photo you already have</span>
+              <input type="file" accept="image/*" className="sr-only" onChange={(e) => onPhoto(e.target.files?.[0])} />
+            </label>
+          )}
           {scan?.busy && (
             <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: T.hair }} aria-hidden="true">
               <div className="h-full" style={{ width: `${Math.round((scan.progress || 0) * 100)}%`, background: T.accent, transition: "width 200ms" }} />
