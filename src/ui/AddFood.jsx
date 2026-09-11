@@ -15,10 +15,9 @@ const TABS = [
   ["new", "New", Plus],
 ];
 
-export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete, onBack }) {
+export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete, onBack, notify }) {
   const [tab, setTab] = useState("search");
   const [overlay, setOverlay] = useState(null); // {kind:"log", food} | {kind:"label", prefill} | {kind:"recipe", recipe}
-  const [result, setResult] = useState(null);
   // Search state lives here so it survives going into a food and coming back.
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState(null);
@@ -37,7 +36,8 @@ export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete,
 
   const finish = (food, servings) => {
     const r = onLog(food, servings);
-    setResult({ name: food.name, servings, ...r });
+    const detail = [addedText(r.added) || "No boxes added.", ...r.notes].join(" ");
+    notify?.(`Logged ${food.name}${servings !== 1 ? ` × ${fmtServ(servings)}` : ""}`, detail);
     setOverlay(null);
   };
 
@@ -71,10 +71,7 @@ export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete,
                 key={id}
                 role="tab"
                 aria-selected={on}
-                onClick={() => {
-                  setTab(id);
-                  setResult(null);
-                }}
+                onClick={() => setTab(id)}
                 className="flex-1 flex items-center justify-center gap-1 rounded-full py-1.5 text-xs focus:outline-none focus-visible:ring-2"
                 style={{ background: on ? T.surface : "transparent", color: on ? T.accentDeep : T.muted, fontWeight: on ? 700 : 400, boxShadow: on ? "0 1px 2px rgba(34,48,43,0.12)" : "none" }}
               >
@@ -87,21 +84,6 @@ export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete,
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto mt-3" style={{ minHeight: 0 }}>
-        {!overlay && result && (
-          <div className="rounded-lg p-3 text-sm mb-3" role="status" style={{ background: T.tint }}>
-            <div className="font-bold" style={{ color: T.accentDeep }}>
-              Logged {result.name}
-              {result.servings !== 1 ? ` × ${fmtServ(result.servings)}` : ""}
-            </div>
-            <div className="mt-0.5">{addedText(result.added) || "No boxes added."}</div>
-            {result.notes.map((n, i) => (
-              <div key={i} className="mt-0.5 text-xs" style={{ color: T.muted }}>
-                {n}
-              </div>
-            ))}
-          </div>
-        )}
-
         {!overlay && tab === "search" && (
           <SearchTab
             q={q}
@@ -438,7 +420,7 @@ function LogPanel({ food, counts, targets, onLog, onEdit, onDelete }) {
         <PreviewAdd per={food.per} servings={servings} counts={counts} targets={targets} />
       </div>
       <div className="flex items-center justify-between mt-4">
-        <button onClick={onLog} className="rounded-full px-5 py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.accent, color: "#fff" }}>
+        <button onClick={() => onLog(servings)} className="rounded-full px-5 py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.accent, color: "#fff" }}>
           Log it
         </button>
         <span className="flex items-center gap-3">

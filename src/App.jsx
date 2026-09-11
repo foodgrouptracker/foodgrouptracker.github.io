@@ -28,7 +28,18 @@ export default function App() {
   const [foods, setFoods] = useState([]);
   const [entries, setEntries] = useState([]);
   const [onboarded, setOnboarded] = useState(true);
-  const [planNotice, setPlanNotice] = useState(null);
+  const [toast, setToast] = useState(null); // {title, detail, key}
+  const toastTimer = useRef(null);
+  const notify = (title, detail = "", ms = 2800) => {
+    clearTimeout(toastTimer.current);
+    setToast({ title, detail, key: Date.now() });
+    toastTimer.current = setTimeout(() => setToast(null), ms);
+  };
+  const [planNotice, setPlanNoticeRaw] = useState(null);
+  const setPlanNotice = (msg) => {
+    setPlanNoticeRaw(null);
+    if (msg) notify(msg, "", 4000);
+  };
   const [helpStart, setHelpStart] = useState(null);
   const reduceMotion = useRef(false);
   const standalone = REQUIRE_INSTALL ? isStandalone() : true;
@@ -242,12 +253,6 @@ export default function App() {
   else if (view === "today")
     screen = (
       <>
-        {planNotice && (
-          <div className="rounded-lg px-3 py-2 text-sm mb-2 flex items-start justify-between gap-3" role="status" style={{ background: T.tint, color: T.accentDeep }}>
-            <span>{planNotice}</span>
-            <button onClick={() => setPlanNotice(null)} aria-label="Dismiss" className="font-bold">×</button>
-          </div>
-        )}
         <TodayScreen
           plan={plan}
           options={options}
@@ -279,7 +284,7 @@ export default function App() {
       />
     );
   else if (view === "help") screen = <HelpScreen start={helpStart} onBack={() => setView("plan")} />;
-  else if (view === "add") screen = <AddFoodScreen foods={foods} counts={counts} targets={current.counts} onLog={logFood} onSave={saveFood} onDelete={deleteFood} onBack={() => setView("today")} />;
+  else if (view === "add") screen = <AddFoodScreen foods={foods} counts={counts} targets={current.counts} onLog={logFood} onSave={saveFood} onDelete={deleteFood} onBack={() => setView("today")} notify={notify} />;
   else if (view === "log") screen = <LogScreen entries={entries} counts={counts} targets={current.counts} onRemove={removeEntry} onChangeServings={changeServings} onBack={() => setView("today")} />;
   else if (view === "history")
     screen = (
@@ -297,6 +302,19 @@ export default function App() {
       <div className="w-full max-w-md h-full flex flex-col px-5" style={{ paddingTop: "max(16px, env(safe-area-inset-top))", paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
         {screen}
       </div>
+      {toast && (
+        <div className="fixed inset-x-0 flex justify-center pointer-events-none" style={{ top: "max(8px, env(safe-area-inset-top))", zIndex: 50 }} role="status" aria-live="polite">
+          <button
+            key={toast.key}
+            onClick={() => setToast(null)}
+            className="fgt-toast pointer-events-auto mx-5 w-full max-w-md rounded-xl px-4 py-3 text-left text-sm focus:outline-none focus-visible:ring-2"
+            style={{ background: T.accentDeep, color: "#fff", boxShadow: "0 8px 24px rgba(34,48,43,0.25)" }}
+          >
+            <div className="font-bold">{toast.title}</div>
+            {toast.detail && <div className="mt-0.5 text-xs" style={{ opacity: 0.9 }}>{toast.detail}</div>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

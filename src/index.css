@@ -9,4 +9,6 @@ html, body, #root { height: 100%; margin: 0; background: #F6F8F6; }
 @keyframes fgtRing { 0% { box-shadow: 0 0 0 0 rgba(47,125,109,0.45); } 100% { box-shadow: 0 0 0 22px rgba(47,125,109,0); } }
 .fgt-pop { animation: fgtPop 520ms cubic-bezier(.2,.9,.3,1.4) both; }
 .fgt-ring { animation: fgtRing 900ms ease-out both; border-radius: 999px; }
-@media (prefers-reduced-motion: reduce) { .fgt-pop, .fgt-ring { animation: none; } }
+@keyframes fgtToast { 0% { transform: translateY(-120%); opacity: 0; } 12% { transform: translateY(0); opacity: 1; } 85% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-120%); opacity: 0; } }
+.fgt-toast { animation: fgtToast 2800ms cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .fgt-pop, .fgt-ring, .fgt-toast { animation: none; } }
