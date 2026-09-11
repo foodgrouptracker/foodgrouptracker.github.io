@@ -14,6 +14,7 @@ import { HistoryScreen } from "./ui/History.jsx";
 import { InstallScreen } from "./ui/Install.jsx";
 import { SetupScreen } from "./ui/Setup.jsx";
 import { Onboarding } from "./ui/Onboarding.jsx";
+import { HelpScreen } from "./ui/Help.jsx";
 
 const REQUIRE_INSTALL = import.meta.env.VITE_REQUIRE_INSTALL !== "false"; // set false for desktop dev
 
@@ -28,6 +29,7 @@ export default function App() {
   const [entries, setEntries] = useState([]);
   const [onboarded, setOnboarded] = useState(true);
   const [planNotice, setPlanNotice] = useState(null);
+  const [helpStart, setHelpStart] = useState(null);
   const reduceMotion = useRef(false);
   const standalone = REQUIRE_INSTALL ? isStandalone() : true;
 
@@ -262,7 +264,19 @@ export default function App() {
         />
       </>
     );
-  else if (view === "plan") screen = <PlanScreen plan={plan} onApply={applyPlan} onBack={() => setView("today")} />;
+  else if (view === "plan")
+    screen = (
+      <PlanScreen
+        plan={plan}
+        onApply={applyPlan}
+        onBack={() => setView("today")}
+        onOpenHelp={(t) => {
+          setHelpStart(t);
+          setView("help");
+        }}
+      />
+    );
+  else if (view === "help") screen = <HelpScreen start={helpStart} onBack={() => setView("plan")} />;
   else if (view === "add") screen = <AddFoodScreen foods={foods} counts={counts} targets={current.counts} onLog={logFood} onSave={saveFood} onDelete={deleteFood} onBack={() => setView("today")} />;
   else if (view === "log") screen = <LogScreen entries={entries} counts={counts} targets={current.counts} onRemove={removeEntry} onChangeServings={changeServings} onBack={() => setView("today")} />;
   else if (view === "history")

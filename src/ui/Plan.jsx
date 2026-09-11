@@ -3,7 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { DAYS_SHORT, GROUPS, HARD_MAX, decodePlan, isoDate, normalizePlan, scheduleText } from "../model.js";
 import { T } from "../theme.js";
 
-export function PlanScreen({ plan, onApply, onBack }) {
+export function PlanScreen({ plan, onApply, onBack, onOpenHelp }) {
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState(null); // {ok, text}
   const [editing, setEditing] = useState(false);
@@ -107,9 +107,16 @@ export function PlanScreen({ plan, onApply, onBack }) {
                 </button>
               </div>
             </div>
-            <p className="mt-4 text-xs" style={{ color: T.muted }}>
-              Everything is saved on this device only.
-            </p>
+            <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${T.hair}` }}>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold" style={{ color: T.accentDeep }}>
+                <button onClick={() => onOpenHelp?.(null)} className="focus:outline-none focus-visible:ring-2">How it works</button>
+                <button onClick={() => onOpenHelp?.("resources")} className="focus:outline-none focus-visible:ring-2">Resources</button>
+                <button onClick={() => onOpenHelp?.("privacy")} className="focus:outline-none focus-visible:ring-2">Privacy</button>
+              </div>
+              <p className="mt-3 text-xs" style={{ color: T.muted }}>
+                Everything is saved on this device only.
+              </p>
+            </div>
           </>
         )}
 
