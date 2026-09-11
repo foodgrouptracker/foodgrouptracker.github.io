@@ -103,3 +103,16 @@ test("label parser survives typical OCR noise", () => {
   assert.equal(r.serving, "2/3 cup (55g)");
   assert.deepEqual(r.missing, []);
 });
+
+
+test("label parser handles lost units, swapped letters, and a serving size on the next line", () => {
+  const text = "Nutrition Facts\nServing Size\n1 cup (240g)\nCalories 150\nTota1 Fat 89 10%\nSaturated Fat 5g\nCholesterol 20mg\nS0dium 125mg\nTotal Carb0hydrate 12g\nFlber 0g\nPr0tein 89\n";
+  const r = parseLabel(text);
+  assert.equal(r.serving, "1 cup (240g)");
+  assert.equal(r.servingGrams, 240);
+  assert.equal(r.fat, 8);
+  assert.equal(r.sodium, 125);
+  assert.equal(r.carb, 12);
+  assert.equal(r.fiber, 0);
+  assert.equal(r.protein, 8);
+});

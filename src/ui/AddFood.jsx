@@ -452,14 +452,15 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
   const [carbRow, setCarbRow] = useState(initial?.carbRow || null);
   const [servings, setServings] = useState(1);
   const opts = initial?.opts || {};
-  const [scan, setScan] = useState(null); // {busy, progress, status, thumbnail, missing, error}
+  const [scan, setScan] = useState(null); // {busy, progress, status, preview, missing, error}
+  const [zoom, setZoom] = useState(false);
 
   const onPhoto = async (file) => {
     if (!file) return;
     setScan({ busy: true, progress: 0, status: "Reading the label" });
     try {
       const r = await scanLabel(file, (m) => {
-        if (m.status === "recognizing text") setScan((sc) => ({ ...(sc || {}), busy: true, progress: m.progress || 0, status: "Reading the label" }));
+        if (m.status === "recognizing text") setScan((sc) => ({ ...(sc || {}), busy: true, progress: m.progress || 0, status: m.pass === 2 ? "Second look" : "Reading the label" }));
         else if (/loading|initializ/.test(m.status || "")) setScan((sc) => ({ ...(sc || {}), busy: true, progress: 0, status: "Getting the reader ready (first time only)" }));
       });
       setMacros((prev) => ({
@@ -470,7 +471,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
         sodium: r.sodium != null ? String(r.sodium) : prev.sodium,
       }));
       if (r.serving && !serving) setServing(r.serving);
-      setScan({ busy: false, thumbnail: r.thumbnail, missing: r.missing, found: r.found });
+      setScan({ busy: false, preview: r.preview, missing: r.missing, found: r.found, serving: r.serving });
     } catch (e) {
       setScan({ busy: false, error: "Couldn't read that photo. Try again with the panel flat, well lit, and filling the frame." });
     }
@@ -520,7 +521,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
             style={{ background: scan?.busy ? T.tint : T.accent, color: scan?.busy ? T.accentDeep : "#fff", opacity: scan?.busy ? 0.9 : 1 }}
           >
             <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-            {scan?.busy ? `${scan.status}${scan.progress ? ` ${Math.round(scan.progress * 100)}%` : "…"}` : scan?.thumbnail ? "Scan again" : "Scan the Nutrition Facts label"}
+            {scan?.busy ? `${scan.status}${scan.progress ? ` ${Math.round(scan.progress * 100)}%` : "…"}` : scan?.preview ? "Scan again" : "Scan the Nutrition Facts label"}
             <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={!!scan?.busy} onChange={(e) => onPhoto(e.target.files?.[0])} />
           </label>
           {scan?.busy && (
@@ -533,12 +534,30 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
               {scan.error}
             </p>
           )}
-          {scan?.thumbnail && (
-            <div className="mt-2 flex gap-3 items-start">
-              <img src={scan.thumbnail} alt="The label you scanned" className="rounded-lg" style={{ width: 96, height: 96, objectFit: "cover", border: `1px solid ${T.hair}` }} />
-              <p className="text-xs" style={{ color: T.muted }}>
-                Check the numbers below against the label and fix anything that's off.
+          {scan?.preview && (
+            <div className="mt-2">
+              <button type="button" onClick={() => setZoom(true)} className="block w-full rounded-lg overflow-hidden focus:outline-none focus-visible:ring-2" style={{ border: `1px solid ${T.hair}`, background: "#fff" }} aria-label="Enlarge the scanned label">
+                <img src={scan.preview} alt="The label you scanned" className="w-full" style={{ maxHeight: 320, objectFit: "contain" }} />
+              </button>
+              <p className="text-xs mt-1" style={{ color: T.muted }}>
+                Tap the photo to enlarge. Check the numbers below against it and fix anything that's off.
                 {scan.missing?.length > 0 && <> Couldn't find {scan.missing.map((k) => MISSING_LABEL[k]).join(", ")}; type {scan.missing.length === 1 ? "it" : "those"} in.</>}
+                {!scan.serving && <> Couldn't read the serving size.</>}
+              </p>
+            </div>
+          )}
+          {zoom && scan?.preview && (
+            <div className="fixed inset-0 flex flex-col" style={{ background: "#111", zIndex: 70 }} role="dialog" aria-label="Scanned label">
+              <div className="flex justify-end p-3">
+                <button onClick={() => setZoom(false)} aria-label="Close" className="rounded-full p-2 focus:outline-none focus-visible:ring-2" style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}>
+                  <X size={22} strokeWidth={2.5} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                <img src={scan.preview} alt="" style={{ width: "200%", maxWidth: "none", display: "block" }} />
+              </div>
+              <p className="text-center text-xs p-3" style={{ color: "#bbb" }}>
+                Drag to move around. Tap × to go back to the numbers.
               </p>
             </div>
           )}
