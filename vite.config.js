@@ -16,7 +16,7 @@ export default defineConfig({
       includeAssets: ["apple-touch-icon.png", "configure/index.html"],
       manifest: {
         name: "Food Group Tracker",
-        short_name: "Food Groups",
+        short_name: "Food Group Tracker",
         description: "Check one box for each serving you eat. Everything stays on your phone.",
         // No start_url on purpose: on iPhone the home-screen icon then launches the page that
         // was added, which carries the dietitian's #plan= link into the installed app.

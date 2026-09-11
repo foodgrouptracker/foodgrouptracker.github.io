@@ -6,6 +6,8 @@ Runs as an installable web app (PWA). **No accounts, no server, no data leaves t
 - `/` — the client app (install to home screen)
 - `/configure/` — the dietitian's Configure Plan page; makes the link a client opens once
 
+**New to this? Read [SETUP.md](SETUP.md) instead. It's the step-by-step, no-command-line version of everything below.**
+
 ## Deploy (GitHub Pages, free)
 
 1. Create a new GitHub repository (any name; `food-group-tracker` recommended). Don't add a README.
