@@ -172,7 +172,7 @@ export function prepareBinary(cv, block = 31, bias = 8) {
 
 // OCR reads "0" as "O", "1" as "l"/"I", "5" as "S" in numbers. Fix inside a numeric token only.
 const num = (s) => {
-  const t = String(s).replace(/[Oo]/g, "0").replace(/[lI|]/g, "1").replace(/S/g, "5").replace(/,/g, ".").replace(/[^0-9.]/g, "");
+  const t = String(s).replace(/[Oo]/g, "0").replace(/[lIi|]/g, "1").replace(/S/g, "5").replace(/,/g, ".").replace(/[^0-9.]/g, "");
   const v = parseFloat(t);
   return Number.isFinite(v) ? v : null;
 };
@@ -187,7 +187,10 @@ const FUZ = {
   protein: "pr[o0]te[il1]n",
   sodium: "s[o0]d[il1]um",
 };
-const NUMTOK = "([0-9OoIl|S][0-9OoIl|S.,]*?)"; // lazy: lets a trailing 9 act as a misread "g"
+const NUMTOK = "([0-9OoIiIl|S][0-9OoIiIl|S.,]*?)"; // lazy: lets a trailing 9 act as a misread "g"
+const NUMTOK_ALL = "([0-9OoIiIl|S][0-9OoIiIl|S.,]*)"; // greedy: the whole number when no unit follows
+const SEP = "[\\s:.\\[\\]|_\\-—–~'\"()]*"; // whatever the OCR drops between a label and its number
+const LT = "(<\\s*)?"; // "<1g" on a label means less than one
 const PLAUSIBLE = { carb: 200, protein: 100, fat: 100, fiber: 60, sodium: 5000 };
 
 export function parseLabel(text) {
@@ -195,25 +198,29 @@ export function parseLabel(text) {
   const lines = t.split("\n").map((l) => l.trim()).filter(Boolean);
   const out = {};
 
+  const sure = {}; // key -> the value came with its unit (more trustworthy)
+  const settle = (key, raw, hasUnit, lessThan) => {
+    let v = num(raw);
+    if (v == null) return false;
+    if (!hasUnit && v > PLAUSIBLE[key] && /9$/.test(String(Math.round(v)))) v = Math.floor(v / 10); // "8g" read as "89"
+    if (lessThan && !hasUnit && /9$/.test(String(Math.round(v)))) v = Math.floor(v / 10); // "<1g" read as "< 19"
+    if (v > PLAUSIBLE[key]) return false;
+    if (lessThan && v <= 1) v = 0.5; // "less than 1 g"
+    out[key] = Math.round(v * 10) / 10;
+    sure[key] = !!hasUnit;
+    return true;
+  };
   const grab = (labelRe, key, unit) => {
     if (out[key] != null) return;
-    const withUnit = new RegExp(`${labelRe}\\s*[:.]?\\s*${NUMTOK}\\s*(${unit})\\b`, "i");
-    const noUnit = new RegExp(`${labelRe}\\s*[:.]?\\s*${NUMTOK}`, "i");
+    const withUnit = new RegExp(`${labelRe}${SEP}${LT}${NUMTOK}\\s*(${unit})\\b`, "i");
+    const noUnit = new RegExp(`${labelRe}${SEP}${LT}${NUMTOK_ALL}`, "i");
     for (const l of lines) {
-      let m = l.match(withUnit);
-      if (m) {
-        const v = num(m[1]);
-        if (v != null && v <= PLAUSIBLE[key]) { out[key] = Math.round(v * 10) / 10; return; }
-      }
+      const m = l.match(withUnit);
+      if (m && settle(key, m[2], true, !!m[1])) return;
     }
     for (const l of lines) {
       const m = l.match(noUnit);
-      if (!m) continue;
-      let v = num(m[1]);
-      if (v == null) continue;
-      // "8g" read as "89": drop a trailing 9 when the value is implausible without it
-      if (v > PLAUSIBLE[key] && /9$/.test(String(Math.round(v)))) v = Math.floor(v / 10);
-      if (v <= PLAUSIBLE[key]) { out[key] = Math.round(v * 10) / 10; return; }
+      if (m && settle(key, m[2], false, !!m[1])) return;
     }
   };
 
@@ -267,26 +274,32 @@ export function parseLabel(text) {
     if (out[key] != null) continue;
     let best = null;
     for (const l of lines) {
-      const cut = l.search(/[0-9OoIl|S][0-9OoIl|S.,]*\s*(?:m?g|9|q)\b/i);
+      const cut = l.search(/[0-9OoIiIl|S][0-9OoIiIl|S.,]*\s*(?:m?g|9|q)\b/i);
       const prefix = (cut > 0 ? l.slice(0, cut) : l).toLowerCase().replace(/[^a-z]/g, "").replace(/rn/g, "m").replace(/vv/g, "w");
       if (prefix.length < 4) continue;
       for (const tgt of TARGETS[key]) {
-        const sim = similarity(prefix.slice(0, tgt.length + 2), tgt);
+        let sim = 0;
+        for (const len of [tgt.length - 1, tgt.length, tgt.length + 1, tgt.length + 2]) {
+          for (let st = 0; st + len <= prefix.length; st++) sim = Math.max(sim, similarity(prefix.slice(st, st + len), tgt));
+          if (prefix.length < len) sim = Math.max(sim, similarity(prefix, tgt));
+        }
         if (sim >= 0.7 && (!best || sim > best.sim)) best = { sim, line: l, cut };
       }
     }
     if (best && best.cut > 0) {
-      const m = best.line.slice(best.cut).match(new RegExp(`^${NUMTOK}\\s*(?:${ROWUNITS[key]})\\b`, "i")) || best.line.slice(best.cut).match(new RegExp(`^${NUMTOK}`, "i"));
-      if (m) {
-        let v = num(m[1]);
-        if (v != null && v > PLAUSIBLE[key] && /9$/.test(String(Math.round(v)))) v = Math.floor(v / 10);
-        if (v != null && v <= PLAUSIBLE[key]) out[key] = Math.round(v * 10) / 10;
+      const rest = best.line.slice(best.cut);
+      const lt = /<\s*$/.test(best.line.slice(Math.max(0, best.cut - 3), best.cut));
+      const m1 = rest.match(new RegExp(`^${NUMTOK}\\s*(?:${ROWUNITS[key]})\\b`, "i"));
+      if (m1) settle(key, m1[1], true, lt);
+      else {
+        const m2 = rest.match(new RegExp(`^${NUMTOK_ALL}`, "i"));
+        if (m2) settle(key, m2[1], false, lt);
       }
     }
   }
 
   const keys = ["carb", "protein", "fat", "fiber", "sodium"];
-  return { ...out, found: keys.filter((k) => out[k] != null), missing: keys.filter((k) => out[k] == null) };
+  return { ...out, sure, found: keys.filter((k) => out[k] != null), missing: keys.filter((k) => out[k] == null) };
 }
 
 // Normalised edit-distance similarity, 0..1.
@@ -303,7 +316,12 @@ export async function scanLabel(file, onProgress) {
   const worker = await getWorker(onProgress);
   const keys = ["carb", "protein", "fat", "fiber", "sodium"];
   const merge = (into, from) => {
-    for (const k of [...keys, "serving", "servingGrams"]) if (into[k] == null && from[k] != null) into[k] = from[k];
+    into.sure = into.sure || {};
+    for (const k of keys) {
+      if (from[k] == null) continue;
+      if (into[k] == null || (!into.sure[k] && from.sure?.[k])) { into[k] = from[k]; into.sure[k] = !!from.sure?.[k]; }
+    }
+    for (const k of ["serving", "servingGrams"]) if (into[k] == null && from[k] != null) into[k] = from[k];
     into.found = keys.filter((k) => into[k] != null);
     into.missing = keys.filter((k) => into[k] == null);
     return into;
@@ -312,20 +330,18 @@ export async function scanLabel(file, onProgress) {
   onProgress?.({ status: "locating", progress: 0 });
   const bmp = await createImageBitmap(file);
   const region = locatePanel(bmp);
-  let text = "";
 
   // Pass 1: the panel (or the whole photo), enlarged, contrast-stretched, read as one block.
   await worker.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
   let { data } = await worker.recognize(prepareContrast(cropToCanvas(bmp, region, 2400)));
   let result = parseLabel(data.text || "");
-  text += data.text || "";
 
   // Pass 2: same crop in adaptive black-and-white, when anything is missing.
-  if (result.missing.length || !result.serving) {
+  const unsure = () => keys.some((k) => result[k] != null && !result.sure?.[k]);
+  if (result.missing.length || unsure() || !result.serving) {
     onProgress?.({ status: "recognizing text", progress: 0, pass: 2 });
     ({ data } = await worker.recognize(prepareBinary(cropToCanvas(bmp, region, 3000))));
     result = merge(result, parseLabel(data.text || ""));
-    text += "\n" + (data.text || "");
   }
 
   // Pass 3: if the crop was a bad guess, the whole photo with automatic layout.
@@ -334,10 +350,9 @@ export async function scanLabel(file, onProgress) {
     await worker.setParameters({ tessedit_pageseg_mode: "3" });
     ({ data } = await worker.recognize(prepareContrast(cropToCanvas(bmp, null, 2200))));
     result = merge(result, parseLabel(data.text || ""));
-    text += "\n" + (data.text || "");
   }
 
   // Preview: the part of the photo the reader used, untouched, large enough to read.
   const prev = cropToCanvas(bmp, region, 1400);
-  return { ...result, preview: prev.toDataURL("image/jpeg", 0.85), cropped: !!region, text };
+  return { ...result, preview: prev.toDataURL("image/jpeg", 0.85), cropped: !!region };
 }

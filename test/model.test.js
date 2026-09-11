@@ -145,3 +145,19 @@ test("garbled row names still match by similarity", () => {
   assert.equal(r.fiber, 3);
   assert.equal(r.protein, 8);
 });
+
+
+test("real photo: values survive stray brackets, leading noise, <1g, and unitless misreads", () => {
+  const pass1 = "yutrition Facts)\nCalories  7 .\nTotal Fat    24g 31%|/2g 4G\n—<é-{urated Fat |12g 60%\nCho sterol —_|65mg_22!\n{ (ON [Sod am somal\n|” \\Tota! Garb. 7/450 si\n_ DielatyFiber__|< 19 Sai\ninc Added Sugars] 29g. 7\nProtein      12\n";
+  const pass2 = "| cy ~Wotal Fat“ j2ég_ ot S1%) 729\nGh | Ge Saturated Fat__ 12g 60% |35q 175%\nPy (Sodium [160mg 7%|4Stna2t |\nLVN \\otarcarb. (46g 16%| 1050 GRare\n| Uf |_Dictary Fiber  <ig 4% 3q_Waert\nAN | _\\ isctictiedSugas| 20g 58%\nMA) Protein | 5g     i   ee\n";
+  const a = parseLabel(pass1), b = parseLabel(pass2);
+  assert.equal(a.fat, 24);
+  assert.equal(a.fiber, 0.5);           // "< 19" is "<1g"
+  assert.equal(a.protein, 12);          // unitless, so not trusted
+  assert.equal(a.sure.protein, false);
+  assert.equal(b.sodium, 160);          // "[" between label and number
+  assert.equal(b.carb, 46);             // "otarcarb." with leading noise
+  assert.equal(b.fiber, 0.5);           // "<ig"
+  assert.equal(b.protein, 5);
+  assert.equal(b.sure.protein, true);
+});
