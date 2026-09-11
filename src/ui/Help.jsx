@@ -11,7 +11,7 @@ export const TOPICS = [
     title: "One box, one serving",
     body: [
       "Your dietitian has given you a plan: a number of servings from each food group for the day. Each box on the Today screen is one serving. When you eat one, check one.",
-      "That's the whole method. You don't count calories, weigh food, or add anything up. The plan already did the arithmetic; your job is to fill the rows.",
+      "That's the whole method. You don't count calories or add anything up. The plan already did the arithmetic; your job is to fill the rows.",
       "When every row is full, the day is done. If you're still hungry, look for a row that has a box open and eat something from that group.",
     ],
   },
@@ -42,11 +42,11 @@ export const TOPICS = [
     id: "adding",
     title: "Adding a food",
     body: [
-      "Use Add food when you're not sure how something counts. There are three ways to enter a food:",
-      "My food lists: type in what your food-list book says one serving counts as. This is the right path for anything in the book, including combination foods like lasagna or a burrito.",
-      "Nutrition label: type the serving size and the five numbers from the panel (carbohydrate, protein, fat, fiber, sodium). The app works out the boxes and shows you its arithmetic. This is the path for packaged foods.",
-      "USDA: search a plain name like \"brown rice cooked\" or \"chicken breast roasted,\" pick a portion, and the app fills in the numbers from the U.S. government's food database. This is the path for generic, unpackaged foods.",
-      "Check \"Save to my foods\" and next time it's one tap from the list.",
+      "Tap Add food and type a plain name: \"banana,\" \"whole wheat bread,\" \"chicken breast roasted.\" The app searches a built-in database of about 7,700 foods from the U.S. Department of Agriculture. Tap a food, then tap the amount you ate, like 1 cup or 1 medium or 3 oz. Each amount shows the boxes it will check.",
+      "History is everything you've logged before. It's one tap to log the same thing again, and matches from your history appear at the top of any search.",
+      "Recipes are your own dishes, built from ingredients. See Mixed foods.",
+      "New is for a packaged food: type the serving size and the five numbers from its Nutrition Facts panel, and the app works out the boxes. It's kept in your History after that.",
+      "Nothing about adding a food needs a book or a chart. The database and the label carry the numbers; the app does the counting.",
     ],
   },
   {
@@ -54,8 +54,8 @@ export const TOPICS = [
     title: "Mixed foods and meals you didn't make",
     body: [
       "For a plate of food, count what's on it: the rice is Starch, the chicken is Meat, the broccoli is Vegetable, the oil it was cooked in is Fat. Check a box for each part, or add each part as a food.",
-      "For a dish with everything mixed together, your food-list book has a section on combination foods that gives the servings for the whole thing. Enter those on the My food lists path.",
-      "When you have no idea, estimate and move on. The plan is meant to build habits over weeks, not to be exact at every meal.",
+      "For a dish you make more than once, build a Recipe: add each ingredient and its amount, say how many servings the pot makes, and save. From then on you log it by the serving, and the app has already divided everything up.",
+      "For a dish someone else made, estimate the parts and move on. The plan is meant to build habits over weeks, not to be exact at every meal.",
     ],
   },
   {
@@ -63,9 +63,9 @@ export const TOPICS = [
     title: "How the app reads a label",
     body: [
       "The food groups are defined by nutrients, and that's what the app uses. About 15 grams of carbohydrate is one Starch or one Fruit serving; a dairy serving is measured by its calories at its fat level; about 5 grams of carbohydrate is one Vegetable serving; about 7 grams of protein is one Meat serving; about 5 grams of fat is one Fat serving. Small amounts of everything count as a free food with no box.",
-      "Protein that comes with a carbohydrate food (like the protein in bread) is part of that serving, not an extra Meat. Fat that comes with a protein food is part of that serving, not an extra Fat. Meat, poultry, fish, and cheese are counted by weight: one ounce is one serving, the same rule your food lists use.",
+      "Protein that comes with a carbohydrate food (like the protein in bread) is part of that serving, not an extra Meat. Fat that comes with a protein food is part of that serving, not an extra Fat. Meat, poultry, fish, and cheese are counted by weight: one ounce is one serving, the same rule dietitians use.",
       "The one thing you decide is which row the carbohydrate belongs in. The app suggests one; change it if it guessed wrong.",
-      "Boxes are rounded to the nearest half. Meat rounds down unless it's very close to the next box. Expect the app and the book to disagree by half a serving now and then; either is fine.",
+      "Boxes are rounded to the nearest half. Meat rounds down unless it's very close to the next box. Two reasonable methods can differ by half a serving now and then; either is fine.",
     ],
   },
   {
@@ -97,8 +97,8 @@ export const TOPICS = [
 
 // Public sources the client can open in their browser. The dietitian can replace this list.
 export const RESOURCES = [
-  { title: "MyPlate", url: "https://www.myplate.gov", note: "U.S. Department of Agriculture: food groups and portions, in plain language." },
-  { title: "Dietary Guidelines for Americans", url: "https://www.dietaryguidelines.gov", note: "The current national nutrition guidance, from USDA and HHS." },
+  { title: "Eat Real Food", url: "https://realfood.gov", note: "The federal government's nutrition guidance site." },
+  { title: "Dietary Guidelines for Americans", url: "https://cdn.realfood.gov/DGA.pdf", note: "The current national nutrition guidance (PDF)." },
   {
     title: "How to read the Nutrition Facts label",
     url: "https://www.fda.gov/food/nutrition-facts-label/how-understand-and-use-nutrition-facts-label",
@@ -113,14 +113,19 @@ export const PRIVACY =
 
 export function HelpScreen({ start, onBack }) {
   const [topic, setTopic] = useState(start || null); // null = index; "resources" | "privacy" | topic id
+  const [fromIndex, setFromIndex] = useState(false); // opened from the How-it-works list, not straight from Plan
 
-  const back = () => (topic ? setTopic(null) : onBack());
+  const open = (id) => {
+    setFromIndex(true);
+    setTopic(id);
+  };
+  const back = () => (topic && fromIndex ? (setTopic(null), setFromIndex(false)) : onBack());
   const title = topic === "resources" ? "Resources" : topic === "privacy" ? "Privacy" : topic ? TOPICS.find((t) => t.id === topic)?.title : "How it works";
 
   return (
     <>
       <div className="flex items-center gap-2">
-        <button onClick={back} aria-label={topic ? "Back to topics" : "Back to plan"} className="rounded-full p-1 -ml-2 focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+        <button onClick={back} aria-label={topic && fromIndex ? "Back to topics" : "Back to plan"} className="rounded-full p-1 -ml-2 focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
           <ChevronLeft size={24} strokeWidth={2.5} />
         </button>
         <h1 className="text-2xl font-bold leading-tight" style={{ color: T.accentDeep }}>
@@ -134,7 +139,7 @@ export function HelpScreen({ start, onBack }) {
             <ul>
               {TOPICS.map((t) => (
                 <li key={t.id} style={{ borderTop: `1px solid ${T.hair}` }}>
-                  <button onClick={() => setTopic(t.id)} className="w-full text-left py-3 flex items-center justify-between gap-3 text-sm font-bold focus:outline-none focus-visible:ring-2">
+                  <button onClick={() => open(t.id)} className="w-full text-left py-3 flex items-center justify-between gap-3 text-sm font-bold focus:outline-none focus-visible:ring-2">
                     {t.title}
                     <ChevronRight size={18} style={{ color: T.muted }} aria-hidden="true" />
                   </button>
@@ -146,7 +151,7 @@ export function HelpScreen({ start, onBack }) {
                 ["resources", "Resources"],
                 ["privacy", "Privacy"],
               ].map(([id, label]) => (
-                <button key={id} onClick={() => setTopic(id)} className="w-full text-left py-3 flex items-center justify-between gap-3 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+                <button key={id} onClick={() => open(id)} className="w-full text-left py-3 flex items-center justify-between gap-3 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
                   {label}
                   <ChevronRight size={18} style={{ color: T.muted }} aria-hidden="true" />
                 </button>
@@ -166,7 +171,7 @@ export function HelpScreen({ start, onBack }) {
         {topic === "resources" && (
           <div className="pb-6">
             <p className="text-sm" style={{ color: T.muted }}>
-              Public sources, chosen with your dietitian. Each opens in your browser. Questions about what to eat go to your dietitian, not to this app.
+              Official public sources. Each opens in your browser. For questions about what to eat go to your dietitian, not this app.
             </p>
             <ul className="mt-3">
               {RESOURCES.map((r) => (

@@ -3,7 +3,7 @@ import { T } from "../theme.js";
 
 const STEPS = [
   { title: "One box, one serving", body: "Tap a box when you eat a serving. Press and hold an empty box for a half serving. Tap a filled box to take the last one back." },
-  { title: "Add food when you're not sure", body: "Use Add food for anything you'd have to look up. Enter what your food lists say, or type the numbers from a nutrition label and the app works out the boxes. Save it and it's one tap next time." },
+  { title: "Add food when you're not sure", body: "Use Add food for anything you'd have to look up. Search the built-in food database, type the numbers from a nutrition label, or build a recipe from ingredients. Everything you log is one tap next time." },
   { title: "Everything is in the log", body: "Every box you check and every food you log is listed with a time. Change servings or remove an entry and the boxes follow." },
   { title: "The week, and a backup", body: "Tap the date to see the week at a glance and share it with your dietitian. Everything lives on this phone only, so make a backup file before you switch phones." },
 ];

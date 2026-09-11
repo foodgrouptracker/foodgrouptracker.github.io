@@ -153,6 +153,7 @@ export default function App() {
 
   // Log a food: add its boxes to today, spilling Starch/Fruit/Milk into one
   // another when a row is full (the interchange rule), and record the entry.
+  // Log a food. Anything logged is kept in History (deduplicated), so it's one tap next time.
   const logFood = (food, servings) => {
     const add = Object.fromEntries(GROUPS.map((g) => [g.id, roundBoxes(g.id, (food.per[g.id] || 0) * servings)]));
     const result = applyExchanges(counts, current.counts, add);
@@ -160,13 +161,14 @@ export default function App() {
       ...e,
       { type: "food", t: Date.now(), name: food.name, servings, per: food.per, source: food.source, fiber: food.fiber ?? null, sodium: food.sodium ?? null, added: result.added },
     ]);
-    if (food.id) {
-      setFoods((fs) => {
-        const next = fs.map((f) => (f.id === food.id ? { ...f, uses: (f.uses || 0) + 1, lastUsed: Date.now() } : f));
-        storeSet("fgt:foods", next);
-        return next;
-      });
-    }
+    setFoods((fs) => {
+      const same = (a, b) => a.id === b.id || (a.fdcId && a.fdcId === b.fdcId && a.serving === b.serving) || (a.name === b.name && a.serving === b.serving && a.source === b.source);
+      const existing = fs.find((f) => same(f, food));
+      const rec = { ...(existing || { id: `f${Date.now().toString(36)}` }), ...food, id: (existing || {}).id || food.id || `f${Date.now().toString(36)}`, uses: ((existing || {}).uses || 0) + 1, lastUsed: Date.now() };
+      const next = [...fs.filter((f) => f.id !== rec.id), rec].sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0, 400);
+      storeSet("fgt:foods", next);
+      return next;
+    });
     return result;
   };
 

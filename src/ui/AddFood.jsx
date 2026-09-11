@@ -1,163 +1,171 @@
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Search } from "lucide-react";
-import { CARB_ROWS, GROUPS, HALF_STEPS, addedText, deriveFromLabel, halfText, perSummary, roundBoxes, suggestCarbRow } from "../model.js";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Search, Clock, BookOpen, Tag } from "lucide-react";
+import { CARB_ROWS, GROUPS, addedText, deriveFromLabel, halfText, perSummary, roundBoxes, suggestCarbRow } from "../model.js";
 import { T } from "../theme.js";
 import { loadUsda, searchUsda, macrosFor, portionsFor, convertOpts } from "../usda.js";
 import { PreviewAdd, ServingsPicker, Tags } from "./shared.jsx";
 
+// Add food: the USDA database is the backbone. Search is the default; History is everything
+// logged before; Recipes are the client's own combination foods; New is a label or a recipe.
+
+const TABS = [
+  ["search", "Search", Search],
+  ["history", "History", Clock],
+  ["recipes", "Recipes", BookOpen],
+  ["new", "New", Plus],
+];
+
 export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete, onBack }) {
+  const [tab, setTab] = useState("search");
+  const [overlay, setOverlay] = useState(null); // {kind:"log", food} | {kind:"label", prefill} | {kind:"recipe", recipe}
+  const [result, setResult] = useState(null);
+  // Search state lives here so it survives going into a food and coming back.
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState("list"); // list | new | detail
-  const [picked, setPicked] = useState(null); // saved food selected for logging
-  const [servings, setServings] = useState(1);
-  const [result, setResult] = useState(null); // {added, notes}
-  const [prefill, setPrefill] = useState(null); // a USDA food handed to the New food form
+  const [openId, setOpenId] = useState(null);
+  const [grams, setGrams] = useState("");
+  const scrollRef = useRef(null);
+  const savedScroll = useRef(0);
 
-  const sorted = [...foods].sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0) || a.name.localeCompare(b.name));
-  const filtered = q.trim() ? sorted.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())) : sorted;
-
-  const log = (food, s) => {
-    const r = onLog(food, s);
-    setResult({ name: food.name, servings: s, ...r });
-    setMode("list");
-    setPicked(null);
-    setPrefill(null);
-    setServings(1);
+  // Restore the list position when an overlay closes.
+  useEffect(() => {
+    if (!overlay && scrollRef.current) scrollRef.current.scrollTop = savedScroll.current;
+  }, [overlay]);
+  const openOverlay = (o) => {
+    savedScroll.current = scrollRef.current?.scrollTop || 0;
+    setOverlay(o);
   };
+
+  const finish = (food, servings) => {
+    const r = onLog(food, servings);
+    setResult({ name: food.name, servings, ...r });
+    setOverlay(null);
+  };
+
+  const history = [...foods.filter((f) => f.source !== "recipe")].sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
+  const recipes = [...foods.filter((f) => f.source === "recipe")].sort((a, b) => a.name.localeCompare(b.name));
+
+  const title = overlay?.kind === "log" ? overlay.food.name : overlay?.kind === "label" ? (overlay.prefill ? "From USDA" : "From a label") : overlay?.kind === "recipe" ? (overlay.recipe ? "Edit recipe" : "New recipe") : "Add food";
 
   return (
     <>
       <div className="flex items-center gap-2">
         <button
-          onClick={() => {
-            if (mode === "list") onBack();
-            else if (mode === "new" && prefill) { setPrefill(null); setMode("usda"); }
-            else { setMode("list"); setPicked(null); setPrefill(null); }
-          }}
-          aria-label={mode === "list" ? "Back to today" : "Back to my foods"}
+          onClick={() => (overlay ? setOverlay(null) : onBack())}
+          aria-label={overlay ? "Back" : "Back to today"}
           className="rounded-full p-1 -ml-2 focus:outline-none focus-visible:ring-2"
           style={{ color: T.accentDeep }}
         >
           <ChevronLeft size={24} strokeWidth={2.5} />
         </button>
-        <h1 className="text-2xl font-bold" style={{ color: T.accentDeep }}>
-          {mode === "new" ? (prefill ? "From USDA" : "New food") : mode === "usda" ? "Search USDA foods" : mode === "detail" ? picked?.name : "Add food"}
+        <h1 className="text-2xl font-bold truncate" style={{ color: T.accentDeep }}>
+          {title}
         </h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto mt-3" style={{ minHeight: 0 }}>
-        {mode === "list" && (
-          <>
-            {result && (
-              <div className="rounded-lg p-3 text-sm mb-3" role="status" style={{ background: T.tint }}>
-                <div className="font-bold" style={{ color: T.accentDeep }}>
-                  Logged {result.name}
-                  {result.servings !== 1 ? ` × ${result.servings}` : ""}
-                </div>
-                <div className="mt-0.5">{addedText(result.added) || "No boxes added."}</div>
-                {result.notes.map((n, i) => (
-                  <div key={i} className="mt-0.5 text-xs" style={{ color: T.muted }}>
-                    {n}
-                  </div>
-                ))}
-              </div>
-            )}
+      {!overlay && (
+        <div role="tablist" className="flex gap-1 mt-3 rounded-full p-0.5" style={{ background: T.tint }}>
+          {TABS.map(([id, label, Icon]) => {
+            const on = tab === id;
+            return (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={on}
+                onClick={() => {
+                  setTab(id);
+                  setResult(null);
+                }}
+                className="flex-1 flex items-center justify-center gap-1 rounded-full py-1.5 text-xs focus:outline-none focus-visible:ring-2"
+                style={{ background: on ? T.surface : "transparent", color: on ? T.accentDeep : T.muted, fontWeight: on ? 700 : 400, boxShadow: on ? "0 1px 2px rgba(34,48,43,0.12)" : "none" }}
+              >
+                <Icon size={14} strokeWidth={2.5} aria-hidden="true" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-            <div className="flex gap-2">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search my foods"
-                aria-label="Search my foods"
-                className="flex-1 rounded-full px-4 py-2 text-sm focus:outline-none focus-visible:ring-2"
-                style={{ border: `1px solid ${T.hair}`, background: T.surface, minWidth: 0 }}
-              />
-              <button
-                onClick={() => setMode("usda")}
-                aria-label="Search USDA foods"
-                className="shrink-0 flex items-center gap-1 rounded-full px-3 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2"
-                style={{ background: T.surface, color: T.accentDeep, border: `1px solid ${T.hair}` }}
-              >
-                <Search size={16} strokeWidth={2.5} aria-hidden="true" />
-                USDA
-              </button>
-              <button
-                onClick={() => setMode("new")}
-                className="shrink-0 flex items-center gap-1 rounded-full pl-2 pr-3 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2"
-                style={{ background: T.accent, color: "#fff" }}
-              >
-                <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
-                New
-              </button>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto mt-3" style={{ minHeight: 0 }}>
+        {!overlay && result && (
+          <div className="rounded-lg p-3 text-sm mb-3" role="status" style={{ background: T.tint }}>
+            <div className="font-bold" style={{ color: T.accentDeep }}>
+              Logged {result.name}
+              {result.servings !== 1 ? ` × ${fmtServ(result.servings)}` : ""}
             </div>
+            <div className="mt-0.5">{addedText(result.added) || "No boxes added."}</div>
+            {result.notes.map((n, i) => (
+              <div key={i} className="mt-0.5 text-xs" style={{ color: T.muted }}>
+                {n}
+              </div>
+            ))}
+          </div>
+        )}
 
-            {filtered.length === 0 && (
-              <p className="text-sm mt-6 text-center" style={{ color: T.muted }}>
-                {foods.length === 0 ? "No saved foods yet. Add the things you eat most and they'll be one tap next time." : "Nothing matches."}
-              </p>
-            )}
-            <ul className="mt-3">
-              {filtered.map((f) => (
-                <li key={f.id} style={{ borderTop: `1px solid ${T.hair}` }}>
-                  <button
-                    onClick={() => {
-                      setPicked(f);
-                      setServings(1);
-                      setMode("detail");
-                    }}
-                    className="w-full text-left py-3 flex items-center justify-between gap-3 focus:outline-none focus-visible:ring-2"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold truncate">{f.name}</span>
-                      <span className="block text-xs truncate" style={{ color: T.muted }}>
-                        {f.serving ? `${f.serving} · ` : ""}
-                        {perSummary(f.per)}
-                        {f.source === "label" ? " · from label" : f.source === "usda" ? " · from USDA" : " · from food lists"}
-                      </span>
-                      <Tags food={f} />
-                    </span>
-                    <ChevronRight size={18} style={{ color: T.muted }} aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+        {!overlay && tab === "search" && (
+          <SearchTab
+            q={q}
+            setQ={setQ}
+            openId={openId}
+            setOpenId={setOpenId}
+            grams={grams}
+            setGrams={setGrams}
+            history={history}
+            onPickSaved={(f) => openOverlay({ kind: "log", food: f })}
+            onPickUsda={(prefill) => openOverlay({ kind: "label", prefill })}
+          />
+        )}
+
+        {!overlay && tab === "history" && <SavedList items={history} empty="Nothing logged yet. Everything you log shows up here, one tap to log again." onPick={(f) => openOverlay({ kind: "log", food: f })} />}
+
+        {!overlay && tab === "recipes" && (
+          <>
+            <button
+              onClick={() => openOverlay({ kind: "recipe", recipe: null })}
+              className="w-full flex items-center justify-center gap-1 rounded-full py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2"
+              style={{ background: T.accent, color: "#fff" }}
+            >
+              <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+              New recipe
+            </button>
+            <div className="mt-3">
+              <SavedList items={recipes} empty="A recipe is your own combination food: add its ingredients once, say how many servings it makes, and log it by the serving from then on." onPick={(f) => openOverlay({ kind: "log", food: f })} />
+            </div>
           </>
         )}
 
-        {mode === "detail" && picked && (
+        {!overlay && tab === "new" && (
+          <div className="grid gap-3">
+            <BigOption icon={Tag} title="From a nutrition label" body="Type the serving size and the numbers from the panel. The app works out the boxes." onClick={() => openOverlay({ kind: "label", prefill: null })} />
+            <BigOption icon={BookOpen} title="New recipe" body="Your own dish: add the ingredients, say how many servings it makes, log it by the serving." onClick={() => openOverlay({ kind: "recipe", recipe: null })} />
+          </div>
+        )}
+
+        {overlay?.kind === "log" && (
           <LogPanel
-            food={picked}
-            servings={servings}
-            setServings={setServings}
+            food={overlay.food}
             counts={counts}
             targets={targets}
-            onLog={() => log(picked, servings)}
+            onLog={(s) => finish(overlay.food, s)}
+            onEdit={overlay.food.source === "recipe" ? () => setOverlay({ kind: "recipe", recipe: overlay.food }) : null}
             onDelete={() => {
-              onDelete(picked.id);
-              setMode("list");
-              setPicked(null);
+              onDelete(overlay.food.id);
+              setOverlay(null);
             }}
           />
         )}
 
-        {mode === "new" && (
-          <NewFoodForm
-            counts={counts}
-            targets={targets}
-            initial={prefill}
-            onDone={(food, s, save) => {
-              const f = save ? onSave(food) : food;
-              log(f, s);
-            }}
-          />
-        )}
+        {overlay?.kind === "label" && <NewFoodForm counts={counts} targets={targets} initial={overlay.prefill} onDone={(food, s) => finish(food, s)} />}
 
-        {mode === "usda" && (
-          <UsdaSearch
-            onPick={(init) => {
-              setPrefill(init);
-              setMode("new");
+        {overlay?.kind === "recipe" && (
+          <RecipeEditor
+            recipe={overlay.recipe}
+            history={history}
+            onSave={(recipe) => {
+              const saved = onSave(recipe);
+              setOverlay({ kind: "log", food: saved });
             }}
+            onCancel={() => setOverlay(null)}
           />
         )}
       </div>
@@ -165,15 +173,263 @@ export function AddFoodScreen({ foods, counts, targets, onLog, onSave, onDelete,
   );
 }
 
+const fmtServ = (s) => (s === 0.5 ? "½" : s === 1.5 ? "1½" : String(s));
 
-export function LogPanel({ food, servings, setServings, counts, targets, onLog, onDelete }) {
+function BigOption({ icon: Icon, title, body, onClick }) {
+  return (
+    <button onClick={onClick} className="w-full text-left rounded-lg p-3 flex items-start gap-3 focus:outline-none focus-visible:ring-2" style={{ background: T.surface, border: `1px solid ${T.hair}` }}>
+      <span className="shrink-0 rounded-full p-2" style={{ background: T.tint, color: T.accentDeep }}>
+        <Icon size={18} strokeWidth={2.2} aria-hidden="true" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold">{title}</span>
+        <span className="block text-xs mt-0.5" style={{ color: T.muted }}>
+          {body}
+        </span>
+      </span>
+      <ChevronRight size={18} className="ml-auto shrink-0" style={{ color: T.muted }} aria-hidden="true" />
+    </button>
+  );
+}
+
+const sourceLabel = (f) => (f.source === "usda" ? "USDA" : f.source === "label" ? "label" : f.source === "recipe" ? `recipe · ${f.makes} servings` : "entered by hand");
+
+function SavedList({ items, empty, onPick }) {
+  if (!items.length)
+    return (
+      <p className="text-sm mt-4 text-center px-4" style={{ color: T.muted }}>
+        {empty}
+      </p>
+    );
+  return (
+    <ul>
+      {items.map((f) => (
+        <li key={f.id} style={{ borderTop: `1px solid ${T.hair}` }}>
+          <button onClick={() => onPick(f)} className="w-full text-left py-3 flex items-center justify-between gap-3 focus:outline-none focus-visible:ring-2">
+            <span className="min-w-0">
+              <span className="block text-sm font-bold truncate">{f.name}</span>
+              <span className="block text-xs truncate" style={{ color: T.muted }}>
+                {f.serving ? `${f.serving} · ` : ""}
+                {perSummary(f.per)} · {sourceLabel(f)}
+              </span>
+              <Tags food={f} />
+            </span>
+            <ChevronRight size={18} style={{ color: T.muted }} aria-hidden="true" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
+function SearchTab({ q, setQ, openId, setOpenId, grams, setGrams, history, onPickSaved, onPickUsda }) {
+  const [ready, setReady] = useState(false);
+  const [err, setErr] = useState(null);
+  const [hits, setHits] = useState([]);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    loadUsda()
+      .then(() => setReady(true))
+      .catch(() => setErr("The food database isn't available yet. Open the app once while online and try again."));
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => setHits(searchUsda(q, 30)), 120);
+    return () => clearTimeout(t);
+  }, [q, ready]);
+
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const fromHistory = words.length ? history.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))).slice(0, 5) : [];
+  const recent = history.slice(0, 6);
+
+  return (
+    <div>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search foods, e.g. brown rice cooked"
+          aria-label="Search foods"
+          className="w-full rounded-full pl-4 pr-10 py-2 focus:outline-none focus-visible:ring-2"
+          style={{ border: `1px solid ${T.hair}`, background: T.surface }}
+        />
+        {q && (
+          <button
+            onClick={() => {
+              setQ("");
+              setOpenId(null);
+              inputRef.current?.focus();
+            }}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 focus:outline-none focus-visible:ring-2"
+            style={{ color: T.muted, background: T.tint }}
+          >
+            <X size={14} strokeWidth={2.5} />
+          </button>
+        )}
+      </div>
+
+      {err && (
+        <p className="text-sm mt-3" style={{ color: "#9A3B2E" }}>
+          {err}
+        </p>
+      )}
+      {!err && !ready && (
+        <p className="text-sm mt-3" style={{ color: T.muted }}>
+          Loading the food database…
+        </p>
+      )}
+
+      {!q && recent.length > 0 && (
+        <>
+          <div className="text-xs font-bold mt-4" style={{ color: T.muted }}>
+            Recent
+          </div>
+          <SavedList items={recent} empty="" onPick={onPickSaved} />
+        </>
+      )}
+      {!q && ready && recent.length === 0 && (
+        <p className="text-sm mt-4" style={{ color: T.muted }}>
+          Type a plain name, like "banana," "whole wheat bread," or "chicken breast roasted." Foods you've logged appear here for one-tap logging.
+        </p>
+      )}
+
+      {q && fromHistory.length > 0 && (
+        <>
+          <div className="text-xs font-bold mt-4" style={{ color: T.muted }}>
+            From your history
+          </div>
+          <SavedList items={fromHistory} empty="" onPick={onPickSaved} />
+        </>
+      )}
+
+      {q && ready && (
+        <div className="text-xs font-bold mt-4" style={{ color: T.muted }}>
+          Foods
+        </div>
+      )}
+      {q && ready && hits.length === 0 && (
+        <p className="text-sm mt-2" style={{ color: T.muted }}>
+          Nothing matches. Try fewer or different words.
+        </p>
+      )}
+      {q && <UsdaResults hits={hits} openId={openId} setOpenId={setOpenId} grams={grams} setGrams={setGrams} onPick={onPickUsda} />}
+    </div>
+  );
+}
+
+// Per-portion boxes for a USDA food.
+function boxesText(food, g) {
+  const m = macrosFor(food, g);
+  const { per } = deriveFromLabel(m, food.row, convertOpts(food, g));
+  const parts = GROUPS.filter((gr) => roundBoxes(gr.id, per[gr.id] || 0) > 0).map((gr) => `${halfText(roundBoxes(gr.id, per[gr.id]))} ${gr.label.split(" /")[0]}`);
+  return parts.length ? parts.join(", ") : "free food";
+}
+function usdaPick(food, label, g) {
+  return { name: food.desc, desc: food.desc, serving: `${label} (${Math.round(g)} g)`, grams: g, macros: macrosFor(food, g), carbRow: food.row, opts: convertOpts(food, g), fdcId: food.id };
+}
+
+export function UsdaResults({ hits, openId, setOpenId, grams, setGrams, onPick }) {
+  return (
+    <ul className="mt-1">
+      {hits.map((f) => {
+        const isOpen = openId === f.id;
+        return (
+          <li key={f.id} style={{ borderTop: `1px solid ${T.hair}` }}>
+            <button
+              onClick={() => {
+                setOpenId(isOpen ? null : f.id);
+                setGrams("");
+              }}
+              aria-expanded={isOpen}
+              className="w-full text-left py-2.5 flex items-start justify-between gap-3 focus:outline-none focus-visible:ring-2"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-bold">{f.desc}</span>
+                <span className="block text-xs" style={{ color: T.muted }}>
+                  {f.category}
+                </span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 mt-0.5" style={{ color: T.muted, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 120ms" }} aria-hidden="true" />
+            </button>
+            {isOpen && (
+              <div className="pb-3">
+                <div className="text-xs font-bold mb-1" style={{ color: T.accentDeep }}>
+                  How much? Tap an amount.
+                </div>
+                <div className="grid gap-1.5">
+                  {portionsFor(f).map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => onPick(usdaPick(f, p.label, p.g))}
+                      className="w-full text-left rounded-lg px-3 py-2 flex items-center justify-between gap-3 text-sm focus:outline-none focus-visible:ring-2"
+                      style={{ background: T.surface, border: `1px solid ${T.hair}` }}
+                    >
+                      <span>
+                        <span className="font-bold">{p.label}</span> <span style={{ color: T.muted }}>· {Math.round(p.g)} g</span>
+                      </span>
+                      <span className="shrink-0 flex items-center gap-1 text-xs" style={{ color: T.accentDeep }}>
+                        {boxesText(f, p.g)}
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </span>
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm" style={{ border: `1px dashed ${T.hair}` }}>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={1}
+                      value={grams}
+                      onChange={(e) => setGrams(e.target.value)}
+                      placeholder="grams"
+                      aria-label="Custom amount in grams"
+                      className="w-24 rounded-lg px-2 py-1 focus:outline-none focus-visible:ring-2"
+                      style={{ border: `1px solid ${T.hair}`, background: T.surface }}
+                    />
+                    <span className="text-xs flex-1" style={{ color: T.accentDeep }}>
+                      {Number(grams) > 0 ? boxesText(f, Number(grams)) : ""}
+                    </span>
+                    <button
+                      onClick={() => Number(grams) > 0 && onPick(usdaPick(f, `${Number(grams)} g`, Number(grams)))}
+                      disabled={!(Number(grams) > 0)}
+                      className="rounded-full px-3 py-1 text-xs font-bold focus:outline-none focus-visible:ring-2"
+                      style={{ background: T.accent, color: "#fff", opacity: Number(grams) > 0 ? 1 : 0.4 }}
+                    >
+                      Use
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
+function LogPanel({ food, counts, targets, onLog, onEdit, onDelete }) {
+  const [servings, setServings] = useState(1);
   return (
     <div>
       <div className="text-sm" style={{ color: T.muted }}>
         {food.serving ? `1 serving = ${food.serving}. ` : ""}
-        Per serving: {perSummary(food.per)}.{food.source === "label" ? " Converted from the nutrition label." : food.source === "usda" ? " Converted from USDA nutrient data." : " From the food lists."}
+        Per serving: {perSummary(food.per)}.{food.source === "usda" ? " From USDA nutrient data." : food.source === "label" ? " From the nutrition label." : food.source === "recipe" ? ` Your recipe, ${food.makes} servings.` : ""}
       </div>
       <Tags food={food} />
+      {food.source === "recipe" && food.ingredients?.length > 0 && (
+        <ul className="mt-3 text-xs" style={{ color: T.muted }}>
+          {food.ingredients.map((i, k) => (
+            <li key={k} className="py-1" style={{ borderTop: `1px solid ${T.hair}` }}>
+              {i.name} <span>· {i.serving}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-4 text-sm font-bold">How many servings?</div>
       <div className="mt-2">
         <ServingsPicker value={servings} onChange={setServings} />
@@ -185,49 +441,53 @@ export function LogPanel({ food, servings, setServings, counts, targets, onLog, 
         <button onClick={onLog} className="rounded-full px-5 py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.accent, color: "#fff" }}>
           Log it
         </button>
-        <button onClick={onDelete} aria-label="Remove from my foods" className="flex items-center gap-1 text-xs focus:outline-none focus-visible:ring-2" style={{ color: T.muted }}>
-          <Trash2 size={14} aria-hidden="true" />
-          Remove
-        </button>
+        <span className="flex items-center gap-3">
+          {onEdit && (
+            <button onClick={onEdit} className="text-xs font-bold focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+              Edit recipe
+            </button>
+          )}
+          <button onClick={onDelete} aria-label="Remove from history" className="flex items-center gap-1 text-xs focus:outline-none focus-visible:ring-2" style={{ color: T.muted }}>
+            <Trash2 size={14} aria-hidden="true" />
+            Remove
+          </button>
+        </span>
       </div>
     </div>
   );
 }
 
-
+// ---------------------------------------------------------------------------
+// A food from a nutrition label (typed now, scanned later), or a USDA food handed in prefilled.
 export function NewFoodForm({ counts, targets, onDone, initial = null }) {
   const usda = !!initial;
   const [name, setName] = useState(initial?.name || "");
   const [serving, setServing] = useState(initial?.serving || "");
-  const [source, setSource] = useState(usda ? "label" : "list"); // list | label (USDA foods use the label arithmetic)
-  const [listPer, setListPer] = useState({ starch: 0, fruit: 0, milk: 0, veg: 0, meat: 0, fat: 0, water: 0 });
   const [macros, setMacros] = useState(
     initial ? { carb: String(initial.macros.carb), protein: String(initial.macros.protein), fat: String(initial.macros.fat), fiber: String(initial.macros.fiber), sodium: String(initial.macros.sodium) } : { carb: "", protein: "", fat: "", fiber: "", sodium: "" }
   );
-  const [carbRow, setCarbRow] = useState(initial?.carbRow || null); // null = auto
+  const [carbRow, setCarbRow] = useState(initial?.carbRow || null);
   const [servings, setServings] = useState(1);
-  const [save, setSave] = useState(true);
   const opts = initial?.opts || {};
 
   const m = { carb: Number(macros.carb) || 0, protein: Number(macros.protein) || 0, fat: Number(macros.fat) || 0 };
-  const autoRow = suggestCarbRow(m);
-  const row = carbRow || autoRow;
-  const derived = source === "label" ? deriveFromLabel(m, row, opts) : null;
-  const per = source === "label" ? derived.per : listPer;
+  const row = carbRow || suggestCarbRow(m);
+  const derived = deriveFromLabel(m, row, opts);
+  const per = derived.per;
   const hasMacros = macros.carb !== "" || macros.protein !== "" || macros.fat !== "";
-  const ready = name.trim() && (source === "list" ? Object.values(listPer).some((v) => v > 0) : hasMacros);
+  const ready = name.trim() && hasMacros;
 
   const food = {
     name: name.trim(),
     serving: serving.trim(),
-    source: usda ? "usda" : source,
+    source: usda ? "usda" : "label",
     per,
-    ...(source === "label"
-      ? { macros: m, carbRow: row, fiber: macros.fiber === "" ? null : Number(macros.fiber), sodium: macros.sodium === "" ? null : Number(macros.sodium) }
-      : {}),
+    macros: m,
+    carbRow: row,
+    fiber: macros.fiber === "" ? null : Number(macros.fiber),
+    sodium: macros.sodium === "" ? null : Number(macros.sodium),
     ...(usda ? { fdcId: initial.fdcId, opts } : {}),
   };
-
   const inputStyle = { border: `1px solid ${T.hair}`, background: T.surface, color: T.ink };
 
   return (
@@ -242,130 +502,60 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
       </label>
       <input value={serving} onChange={(e) => setServing(e.target.value)} placeholder="e.g. ¾ cup, 1 slice, 3 oz" className="w-full mt-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus-visible:ring-2" style={inputStyle} />
 
-      {usda && (
+      {usda ? (
         <p className="text-xs mt-3" style={{ color: T.muted }}>
           USDA FoodData Central: {initial.desc}. Numbers below are for {initial.serving}; edit them if you ate a different amount.
         </p>
-      )}
-      {!usda && (
-      <div className="text-xs font-bold mt-4" style={{ color: T.accentDeep }}>
-        Where do the servings come from?
-      </div>
-      )}
-      {!usda && (
-      <div role="radiogroup" className="inline-flex rounded-full p-0.5 mt-1" style={{ background: T.tint }}>
-        {[
-          ["list", "My food lists"],
-          ["label", "Nutrition label"],
-        ].map(([v, l]) => (
-          <button
-            key={v}
-            role="radio"
-            aria-checked={source === v}
-            onClick={() => setSource(v)}
-            className="rounded-full px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2"
-            style={{ background: source === v ? T.surface : "transparent", color: source === v ? T.accentDeep : T.muted, fontWeight: source === v ? 700 : 400, boxShadow: source === v ? "0 1px 2px rgba(34,48,43,0.12)" : "none" }}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
+      ) : (
+        <p className="text-xs mt-3" style={{ color: T.muted }}>
+          Per serving, from the Nutrition Facts panel. The app works out the boxes from these numbers.
+        </p>
       )}
 
-      {source === "list" && (
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        {[
+          ["carb", "Total carb (g)"],
+          ["protein", "Protein (g)"],
+          ["fat", "Total fat (g)"],
+          ["fiber", "Fiber (g)"],
+          ["sodium", "Sodium (mg)"],
+        ].map(([k, l]) => (
+          <label key={k} className="text-xs" style={{ color: T.muted }}>
+            {l}
+            <input type="number" inputMode="decimal" min={0} value={macros[k]} onChange={(e) => setMacros({ ...macros, [k]: e.target.value })} className="w-full mt-1 rounded-lg px-2 py-2 text-sm focus:outline-none focus-visible:ring-2" style={inputStyle} />
+          </label>
+        ))}
+      </div>
+
+      {hasMacros && !derived.free && m.carb >= 3 && (
         <div className="mt-3">
-          <p className="text-xs" style={{ color: T.muted }}>
-            Enter what the food lists say one serving counts as.
-          </p>
-          {GROUPS.filter((g) => g.id !== "water").map((g) => (
-            <div key={g.id} className="flex items-center justify-between py-1.5 text-sm" style={{ borderTop: `1px solid ${T.hair}` }}>
-              <span>{g.label}</span>
-              <select
-                aria-label={`${g.label} servings`}
-                value={listPer[g.id]}
-                onChange={(e) => setListPer({ ...listPer, [g.id]: Number(e.target.value) })}
-                className="rounded-lg px-2 py-1 text-sm focus:outline-none focus-visible:ring-2"
-                style={inputStyle}
-              >
-                {HALF_STEPS.map((v) => (
-                  <option key={v} value={v}>
-                    {v === 0 ? "—" : halfText(v)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+          <div className="text-xs" style={{ color: T.muted }}>
+            Which row do the carbs belong in?{!carbRow && " (suggested)"}
+          </div>
+          <div className="flex gap-1.5 flex-wrap mt-1" role="radiogroup" aria-label="Carbohydrate row">
+            {CARB_ROWS.map((r) => {
+              const on = r.id === row;
+              return (
+                <button key={r.id} role="radio" aria-checked={on} onClick={() => setCarbRow(r.id)} className="rounded-full px-3 py-1 text-xs focus:outline-none focus-visible:ring-2" style={{ background: on ? T.accent : T.surface, color: on ? "#fff" : T.ink, border: `1px solid ${on ? T.accent : T.hair}`, fontWeight: on ? 700 : 400 }}>
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {source === "label" && (
-        <div className="mt-3">
-          {!usda && (
-            <p className="text-xs" style={{ color: T.muted }}>
-              Per serving, from the Nutrition Facts panel. The app works out the boxes; you can't assign them by hand.
-            </p>
-          )}
-          <div className="grid grid-cols-3 gap-2 mt-2">
-            {[
-              ["carb", "Total carb (g)"],
-              ["protein", "Protein (g)"],
-              ["fat", "Total fat (g)"],
-              ["fiber", "Fiber (g)"],
-              ["sodium", "Sodium (mg)"],
-            ].map(([k, l]) => (
-              <label key={k} className="text-xs" style={{ color: T.muted }}>
-                {l}
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  value={macros[k]}
-                  onChange={(e) => setMacros({ ...macros, [k]: e.target.value })}
-                  className="w-full mt-1 rounded-lg px-2 py-2 text-sm focus:outline-none focus-visible:ring-2"
-                  style={{ ...inputStyle, color: T.ink }}
-                />
-              </label>
-            ))}
+      {hasMacros && (
+        <div className="mt-3 rounded-lg p-3 text-xs" style={{ background: T.surface, border: `1px solid ${T.hair}` }}>
+          <div className="font-bold text-sm mb-1" style={{ color: T.accentDeep }}>
+            Per serving: {perSummary(per)}
           </div>
-
-          {hasMacros && !derived.free && m.carb >= 3 && (
-            <div className="mt-3">
-              <div className="text-xs" style={{ color: T.muted }}>
-                Which row do the carbs belong in?{!carbRow && " (suggested)"}
-              </div>
-              <div className="flex gap-1.5 flex-wrap mt-1" role="radiogroup" aria-label="Carbohydrate row">
-                {CARB_ROWS.map((r) => {
-                  const on = r.id === row;
-                  return (
-                    <button
-                      key={r.id}
-                      role="radio"
-                      aria-checked={on}
-                      onClick={() => setCarbRow(r.id)}
-                      className="rounded-full px-3 py-1 text-xs focus:outline-none focus-visible:ring-2"
-                      style={{ background: on ? T.accent : T.surface, color: on ? "#fff" : T.ink, border: `1px solid ${on ? T.accent : T.hair}`, fontWeight: on ? 700 : 400 }}
-                    >
-                      {r.label}
-                    </button>
-                  );
-                })}
-              </div>
+          <Tags food={food} />
+          {derived.steps.map((s, i) => (
+            <div key={i} style={{ color: T.muted }}>
+              {s}
             </div>
-          )}
-
-          {hasMacros && (
-            <div className="mt-3 rounded-lg p-3 text-xs" style={{ background: T.surface, border: `1px solid ${T.hair}` }}>
-              <div className="font-bold text-sm mb-1" style={{ color: T.accentDeep }}>
-                Per serving: {perSummary(per)}
-              </div>
-              <Tags food={food} />
-              {derived.steps.map((s, i) => (
-                <div key={i} style={{ color: T.muted }}>
-                  {s}
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -378,11 +568,10 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
           <div className="mt-3">
             <PreviewAdd per={per} servings={servings} counts={counts} targets={targets} />
           </div>
-          <label className="flex items-center gap-2 mt-3 text-sm">
-            <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} />
-            Save to my foods for next time
-          </label>
-          <button onClick={() => onDone(food, servings, save)} className="mt-4 rounded-full px-5 py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.accent, color: "#fff" }}>
+          <p className="text-xs mt-2" style={{ color: T.muted }}>
+            This food is kept in your History for next time.
+          </p>
+          <button onClick={() => onDone(food, servings)} className="mt-3 rounded-full px-5 py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.accent, color: "#fff" }}>
             Log it
           </button>
         </>
@@ -391,144 +580,179 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
   );
 }
 
-
-
 // ---------------------------------------------------------------------------
-function UsdaSearch({ onPick }) {
+// Recipe: ingredients (from the database or History) → per-serving boxes.
+function perFor(ing) {
+  // Ingredient shapes: USDA pick {macros, carbRow, opts} × 1; History food {per} × servings
+  if (ing.per) return Object.fromEntries(GROUPS.map((g) => [g.id, (ing.per[g.id] || 0) * (ing.servings || 1)]));
+  return deriveFromLabel(ing.macros, ing.carbRow, ing.opts || {}).per;
+}
+
+function RecipeEditor({ recipe, history, onSave, onCancel }) {
+  const [name, setName] = useState(recipe?.name || "");
+  const [makes, setMakes] = useState(recipe?.makes || 4);
+  const [ings, setIngs] = useState(recipe?.ingredients || []);
+  const [adding, setAdding] = useState(null); // "usda" | "history" | null
   const [q, setQ] = useState("");
-  const [ready, setReady] = useState(false);
-  const [err, setErr] = useState(null);
-  const [hits, setHits] = useState([]);
-  const [open, setOpen] = useState(null); // food whose portions are showing
+  const [openId, setOpenId] = useState(null);
   const [grams, setGrams] = useState("");
+  const [hits, setHits] = useState([]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    loadUsda()
-      .then(() => setReady(true))
-      .catch(() => setErr("The food database isn't available offline yet. Open the app once while online and try again."));
-  }, []);
+    if (adding !== "usda") return;
+    loadUsda().then(() => setReady(true)).catch(() => setReady(false));
+  }, [adding]);
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(() => setHits(searchUsda(q, 30)), 120);
+    const t = setTimeout(() => setHits(searchUsda(q, 20)), 120);
     return () => clearTimeout(t);
   }, [q, ready]);
 
-  const boxesText = (food, g) => {
-    const m = macrosFor(food, g);
-    const { per } = deriveFromLabel(m, food.row, convertOpts(food, g));
-    const parts = GROUPS.filter((gr) => roundBoxes(gr.id, per[gr.id] || 0) > 0).map((gr) => `${halfText(roundBoxes(gr.id, per[gr.id]))} ${gr.label.split(" /")[0]}`);
-    return parts.length ? parts.join(", ") : "free food";
-  };
-  const pick = (food, label, g) => {
-    onPick({ name: food.desc, desc: food.desc, serving: `${label} (${Math.round(g)} g)`, macros: macrosFor(food, g), carbRow: food.row, opts: convertOpts(food, g), fdcId: food.id });
-  };
+  const total = GROUPS.reduce((acc, g) => ((acc[g.id] = ings.reduce((s, i) => s + (perFor(i)[g.id] || 0), 0)), acc), {});
+  const perServing = Object.fromEntries(GROUPS.map((g) => [g.id, total[g.id] / Math.max(1, makes)]));
+  const fiber = ings.reduce((s, i) => s + (i.macros?.fiber || 0) * (i.servings || 1) || (i.fiber || 0) * (i.servings || 1), 0) / Math.max(1, makes);
+  const sodium = ings.reduce((s, i) => s + (i.macros?.sodium || 0) * (i.servings || 1) || (i.sodium || 0) * (i.servings || 1), 0) / Math.max(1, makes);
+  const ready2 = name.trim() && ings.length > 0;
+
+  const save = () =>
+    onSave({
+      ...(recipe || {}),
+      name: name.trim(),
+      serving: `1 of ${makes}`,
+      source: "recipe",
+      makes,
+      ingredients: ings,
+      per: perServing,
+      fiber: Math.round(fiber * 10) / 10,
+      sodium: Math.round(sodium),
+    });
+
+  const inputStyle = { border: `1px solid ${T.hair}`, background: T.surface, color: T.ink };
+  const histMatches = q ? history.filter((f) => q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => f.name.toLowerCase().includes(w))).slice(0, 10) : history.slice(0, 10);
+
+  if (adding) {
+    return (
+      <div>
+        <button onClick={() => setAdding(null)} className="text-sm font-bold flex items-center gap-1 focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+          <ChevronLeft size={16} /> Back to recipe
+        </button>
+        <div className="relative mt-3">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={adding === "usda" ? "Search foods" : "Search your history"} aria-label="Search" className="w-full rounded-full pl-4 pr-10 py-2 focus:outline-none focus-visible:ring-2" style={inputStyle} autoFocus />
+          {q && (
+            <button onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1" style={{ color: T.muted, background: T.tint }}>
+              <X size={14} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
+        {adding === "usda" && (
+          <UsdaResults
+            hits={hits}
+            openId={openId}
+            setOpenId={setOpenId}
+            grams={grams}
+            setGrams={setGrams}
+            onPick={(p) => {
+              setIngs([...ings, { name: p.desc, serving: p.serving, macros: p.macros, carbRow: p.carbRow, opts: p.opts, fdcId: p.fdcId }]);
+              setAdding(null);
+              setQ("");
+              setOpenId(null);
+            }}
+          />
+        )}
+        {adding === "history" && (
+          <SavedList
+            items={histMatches}
+            empty="Nothing in your history yet."
+            onPick={(f) => {
+              setIngs([...ings, { name: f.name, serving: f.serving || "1 serving", per: f.per, servings: 1, fiber: f.fiber, sodium: f.sodium }]);
+              setAdding(null);
+              setQ("");
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="e.g. brown rice, chicken breast, banana"
-        aria-label="Search USDA foods"
-        autoFocus
-        className="w-full rounded-full px-4 py-2 focus:outline-none focus-visible:ring-2"
-        style={{ border: `1px solid ${T.hair}`, background: T.surface }}
-      />
-      {err && (
-        <p className="text-sm mt-3" style={{ color: "#9A3B2E" }}>
-          {err}
-        </p>
-      )}
-      {!err && !ready && (
-        <p className="text-sm mt-3" style={{ color: T.muted }}>
-          Loading the food database…
-        </p>
-      )}
-      {ready && q && hits.length === 0 && (
-        <p className="text-sm mt-3" style={{ color: T.muted }}>
-          Nothing matches. Try fewer or different words; the database uses plain names like "chicken breast roasted".
-        </p>
-      )}
-      <ul className="mt-2">
-        {hits.map((f) => {
-          const isOpen = open?.id === f.id;
-          return (
-            <li key={f.id} style={{ borderTop: `1px solid ${T.hair}` }}>
-              <button
-                onClick={() => {
-                  setOpen(isOpen ? null : f);
-                  setGrams("");
-                }}
-                aria-expanded={isOpen}
-                className="w-full text-left py-2.5 flex items-start justify-between gap-3 focus:outline-none focus-visible:ring-2"
-              >
-                <span className="min-w-0">
-                  <span className="block text-sm font-bold">{f.desc}</span>
-                  <span className="block text-xs" style={{ color: T.muted }}>
-                    {f.category}
-                  </span>
-                </span>
-                <ChevronRight size={18} style={{ color: T.muted, transform: isOpen ? "rotate(90deg)" : "none" }} aria-hidden="true" />
-              </button>
-              {isOpen && (
-                <div className="pb-3">
-                  <div className="text-xs font-bold" style={{ color: T.accentDeep }}>
-                    How much?
-                  </div>
-                  <ul className="mt-1">
-                    {portionsFor(f).map((p) => (
-                      <li key={p.label}>
-                        <button
-                          onClick={() => pick(f, p.label, p.g)}
-                          className="w-full text-left py-1.5 flex items-baseline justify-between gap-3 text-sm focus:outline-none focus-visible:ring-2"
-                        >
-                          <span>
-                            {p.label} <span style={{ color: T.muted }}>· {Math.round(p.g)} g</span>
-                          </span>
-                          <span className="shrink-0 text-xs" style={{ color: T.accentDeep }}>
-                            {boxesText(f, p.g)}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex items-center gap-2 mt-1 text-sm">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={1}
-                      value={grams}
-                      onChange={(e) => setGrams(e.target.value)}
-                      placeholder="grams"
-                      aria-label="Custom amount in grams"
-                      className="w-24 rounded-lg px-2 py-1 focus:outline-none focus-visible:ring-2"
-                      style={{ border: `1px solid ${T.hair}`, background: T.surface }}
-                    />
-                    <button
-                      onClick={() => Number(grams) > 0 && pick(f, `${Number(grams)} g`, Number(grams))}
-                      disabled={!(Number(grams) > 0)}
-                      className="rounded-full px-3 py-1 text-xs font-bold focus:outline-none focus-visible:ring-2"
-                      style={{ background: T.tint, color: T.accentDeep, opacity: Number(grams) > 0 ? 1 : 0.5 }}
-                    >
-                      Use
-                    </button>
-                    {Number(grams) > 0 && (
-                      <span className="text-xs" style={{ color: T.accentDeep }}>
-                        {boxesText(f, Number(grams))}
-                      </span>
-                    )}
-                  </div>
-                </div>
+      <label className="text-xs font-bold block" style={{ color: T.accentDeep }}>
+        Recipe name
+      </label>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sunday chili" className="w-full mt-1 rounded-lg px-3 py-2 text-sm focus:outline-none focus-visible:ring-2" style={inputStyle} />
+
+      <div className="flex items-center justify-between mt-4">
+        <span className="text-sm font-bold">Makes how many servings?</span>
+        <span className="inline-flex items-center rounded-full overflow-hidden" style={{ border: `1px solid ${T.hair}`, background: T.surface }}>
+          <button type="button" aria-label="Fewer servings" onClick={() => setMakes(Math.max(1, makes - 1))} className="w-9 h-8 text-lg focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+            −
+          </button>
+          <input type="number" inputMode="numeric" aria-label="Servings the recipe makes" value={makes} min={1} max={48} onChange={(e) => setMakes(Math.max(1, Math.min(48, Math.round(Number(e.target.value)) || 1)))} className="w-12 h-8 text-center text-sm font-bold focus:outline-none" style={{ border: "none", background: "transparent" }} />
+          <button type="button" aria-label="More servings" onClick={() => setMakes(Math.min(48, makes + 1))} className="w-9 h-8 text-lg focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+            +
+          </button>
+        </span>
+      </div>
+
+      <div className="text-xs font-bold mt-4" style={{ color: T.accentDeep }}>
+        Ingredients (the whole recipe)
+      </div>
+      <ul className="mt-1">
+        {ings.map((i, k) => (
+          <li key={k} className="py-2 flex items-center justify-between gap-3 text-sm" style={{ borderTop: `1px solid ${T.hair}` }}>
+            <span className="min-w-0">
+              <span className="block font-bold truncate">{i.name}</span>
+              <span className="block text-xs" style={{ color: T.muted }}>
+                {i.serving}
+                {i.servings && i.servings !== 1 ? ` × ${fmtServ(i.servings)}` : ""} · {perSummary(perFor(i))}
+              </span>
+            </span>
+            <span className="shrink-0 flex items-center gap-2">
+              {i.per && (
+                <select aria-label="Servings of this ingredient" value={i.servings || 1} onChange={(e) => setIngs(ings.map((x, j) => (j === k ? { ...x, servings: Number(e.target.value) } : x)))} className="rounded-lg px-2 py-1 text-xs" style={inputStyle}>
+                  {[0.5, 1, 1.5, 2, 3, 4, 6, 8].map((v) => (
+                    <option key={v} value={v}>
+                      × {fmtServ(v)}
+                    </option>
+                  ))}
+                </select>
               )}
-            </li>
-          );
-        })}
+              <button onClick={() => setIngs(ings.filter((_, j) => j !== k))} aria-label={`Remove ${i.name}`} className="rounded-full p-1 focus:outline-none focus-visible:ring-2" style={{ color: T.muted }}>
+                <Trash2 size={16} />
+              </button>
+            </span>
+          </li>
+        ))}
       </ul>
-      {ready && (
-        <p className="text-xs mt-4" style={{ color: T.muted }}>
-          Generic foods from USDA FoodData Central (public domain), converted with the same rules as a nutrition label. Packaged foods: use the label. Mixed dishes: use your food lists.
-        </p>
+      <div className="flex gap-2 mt-2">
+        <button onClick={() => setAdding("usda")} className="flex items-center gap-1 rounded-full px-3 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.tint, color: T.accentDeep }}>
+          <Search size={14} strokeWidth={2.5} aria-hidden="true" /> Add from foods
+        </button>
+        <button onClick={() => setAdding("history")} className="flex items-center gap-1 rounded-full px-3 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.tint, color: T.accentDeep }}>
+          <Clock size={14} strokeWidth={2.5} aria-hidden="true" /> Add from history
+        </button>
+      </div>
+
+      {ings.length > 0 && (
+        <div className="mt-4 rounded-lg p-3 text-sm" style={{ background: T.surface, border: `1px solid ${T.hair}` }}>
+          <div className="font-bold" style={{ color: T.accentDeep }}>
+            Per serving (1 of {makes}): {perSummary(perServing)}
+          </div>
+          <div className="text-xs mt-1" style={{ color: T.muted }}>
+            Whole recipe: {perSummary(total)}
+          </div>
+        </div>
       )}
+
+      <div className="flex gap-2 mt-4 mb-2">
+        <button onClick={save} disabled={!ready2} className="rounded-full px-5 py-2.5 text-sm font-bold focus:outline-none focus-visible:ring-2" style={{ background: T.accent, color: "#fff", opacity: ready2 ? 1 : 0.5 }}>
+          Save recipe
+        </button>
+        <button onClick={onCancel} className="rounded-full px-4 py-2.5 text-sm focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep, border: `1px solid ${T.hair}` }}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
