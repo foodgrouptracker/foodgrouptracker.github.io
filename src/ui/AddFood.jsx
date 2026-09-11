@@ -460,7 +460,8 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
     setScan({ busy: true, progress: 0, status: "Reading the label" });
     try {
       const r = await scanLabel(file, (m) => {
-        if (m.status === "recognizing text") setScan((sc) => ({ ...(sc || {}), busy: true, progress: m.progress || 0, status: m.pass === 2 ? "Second look" : "Reading the label" }));
+        if (m.status === "locating") setScan((sc) => ({ ...(sc || {}), busy: true, progress: 0, status: "Finding the label" }));
+        else if (m.status === "recognizing text") setScan((sc) => ({ ...(sc || {}), busy: true, progress: m.progress || 0, status: m.pass === 3 ? "Trying the whole photo" : m.pass === 2 ? "Second look" : "Reading the label" }));
         else if (/loading|initializ/.test(m.status || "")) setScan((sc) => ({ ...(sc || {}), busy: true, progress: 0, status: "Getting the reader ready (first time only)" }));
       });
       // A scan describes one label: take everything it read and clear what it didn't,
@@ -474,7 +475,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
       });
       setServing(r.serving || "");
       setCarbRow(null);
-      setScan({ busy: false, preview: r.preview, missing: r.missing, found: r.found, serving: r.serving });
+      setScan({ busy: false, preview: r.preview, cropped: r.cropped, missing: r.missing, found: r.found, serving: r.serving });
     } catch (e) {
       setScan({ busy: false, error: "Couldn't read that photo. Try again with the panel flat, well lit, and filling the frame." });
     }
@@ -543,7 +544,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
                 <img src={scan.preview} alt="The label you scanned" className="w-full" style={{ maxHeight: 320, objectFit: "contain" }} />
               </button>
               <p className="text-xs mt-1" style={{ color: T.muted }}>
-                Tap the photo to enlarge. Check the numbers below against it and fix anything that's off.
+                {scan.cropped ? "This is the part of the photo that was read. " : ""}Tap to enlarge. Check the numbers below against it and fix anything that's off.
                 {scan.missing?.length > 0 && <> Couldn't find {scan.missing.map((k) => MISSING_LABEL[k]).join(", ")}; type {scan.missing.length === 1 ? "it" : "those"} in.</>}
                 {!scan.serving && <> Couldn't read the serving size.</>}
               </p>

@@ -126,3 +126,12 @@ test("serving size keeps the amount and drops merged neighbouring text", () => {
   assert.equal(parseLabel("Serving size Sp CROPP Cooperative\nTotal Fat 6g").serving, undefined);
   assert.equal(parseLabel("Serving size about 3 cookies (34g)").servingGrams, 34);
 });
+
+
+test("a trailing 9 stands in for a misread g on a two-column label", () => {
+  const r = parseLabel("Total Fat 29 3% 4.5g 6%\nSodium 410mg 18% 890mg 39%\nTotal Carb. 18g 7% 39g 14%\nDietary Fiber 3g 11% 7g 25%\nProtein 89 13% 17g 28%");
+  assert.equal(r.fat, 2);
+  assert.equal(r.protein, 8);
+  assert.equal(r.carb, 18);
+  assert.equal(r.sodium, 410);
+});

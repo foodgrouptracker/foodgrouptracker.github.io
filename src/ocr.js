@@ -40,6 +40,87 @@ function luminance(c, w, h) {
   return lum;
 }
 
+// Find the label in the photo without reading it: text is dense in edges, packaging and
+// shelves are not. Returns a box in the bitmap's own pixels, or null if nothing text-like
+// stands out. Mirrors a prototype verified against cluttered test scenes.
+export function locatePanel(bmp) {
+  const w = 400, h = Math.max(1, Math.round((bmp.height / bmp.width) * 400));
+  const cv = document.createElement("canvas");
+  cv.width = w;
+  cv.height = h;
+  const c = cv.getContext("2d");
+  c.drawImage(bmp, 0, 0, w, h);
+  const lum = luminance(c, w, h);
+  const T = 8, th = Math.floor(h / T), tw = Math.floor(w / T);
+  if (th < 4 || tw < 4) return null;
+  const dens = new Float32Array(th * tw);
+  for (let ty = 0; ty < th; ty++) {
+    for (let tx = 0; tx < tw; tx++) {
+      let n = 0;
+      for (let y = ty * T; y < (ty + 1) * T; y++) {
+        for (let x = tx * T; x < (tx + 1) * T; x++) {
+          const i = y * w + x;
+          if (x + 1 < w && Math.abs(lum[i + 1] - lum[i]) > 40) n++;
+          if (y + 1 < h && Math.abs(lum[i + w] - lum[i]) > 40) n++;
+        }
+      }
+      dens[ty * tw + tx] = n / (2 * T * T);
+    }
+  }
+  const mask = new Uint8Array(th * tw);
+  for (let i = 0; i < mask.length; i++) mask[i] = dens[i] > 0.12 ? 1 : 0;
+  const grown = new Uint8Array(th * tw);
+  for (let ty = 0; ty < th; ty++)
+    for (let tx = 0; tx < tw; tx++)
+      if (mask[ty * tw + tx]) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const ny = ty + dy, nx = tx + dx;
+        if (ny >= 0 && ny < th && nx >= 0 && nx < tw) grown[ny * tw + nx] = 1;
+      }
+  const seen = new Uint8Array(th * tw);
+  let best = null;
+  for (let start = 0; start < grown.length; start++) {
+    if (!grown[start] || seen[start]) continue;
+    const stack = [start];
+    seen[start] = 1;
+    let score = 0, x0 = tw, y0 = th, x1 = -1, y1 = -1, cells = 0;
+    while (stack.length) {
+      const i = stack.pop();
+      const ty = Math.floor(i / tw), tx = i % tw;
+      score += dens[i];
+      cells++;
+      if (tx < x0) x0 = tx;
+      if (tx > x1) x1 = tx;
+      if (ty < y0) y0 = ty;
+      if (ty > y1) y1 = ty;
+      for (const [ny, nx] of [[ty - 1, tx], [ty + 1, tx], [ty, tx - 1], [ty, tx + 1]]) {
+        if (ny < 0 || ny >= th || nx < 0 || nx >= tw) continue;
+        const j = ny * tw + nx;
+        if (grown[j] && !seen[j]) { seen[j] = 1; stack.push(j); }
+      }
+    }
+    if (!best || score > best.score) best = { score, x0, y0, x1, y1, cells };
+  }
+  if (!best || best.cells < 0.03 * th * tw) return null; // nothing text-like; read the whole photo
+  const sx = bmp.width / w, sy = bmp.height / h;
+  const mx = 0.04 * bmp.width, my = 0.04 * bmp.height;
+  return {
+    x: Math.max(0, best.x0 * T * sx - mx),
+    y: Math.max(0, best.y0 * T * sy - my),
+    w: Math.min(bmp.width, (best.x1 + 1) * T * sx + mx) - Math.max(0, best.x0 * T * sx - mx),
+    h: Math.min(bmp.height, (best.y1 + 1) * T * sy + my) - Math.max(0, best.y0 * T * sy - my),
+  };
+}
+
+function cropToCanvas(bmp, region, targetLong) {
+  const r = region || { x: 0, y: 0, w: bmp.width, h: bmp.height };
+  const scale = targetLong / Math.max(r.w, r.h);
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.round(r.w * scale));
+  cv.height = Math.max(1, Math.round(r.h * scale));
+  cv.getContext("2d").drawImage(bmp, r.x, r.y, r.w, r.h, 0, 0, cv.width, cv.height);
+  return cv;
+}
+
 // Pass 1: grayscale with a contrast stretch. Good for flat, evenly lit labels.
 export function prepareContrast(cv) {
   const w = cv.width, h = cv.height, c = cv.getContext("2d");
@@ -106,7 +187,7 @@ const FUZ = {
   protein: "pr[o0]te[il1]n",
   sodium: "s[o0]d[il1]um",
 };
-const NUMTOK = "([0-9OoIl|S][0-9OoIl|S.,]*)";
+const NUMTOK = "([0-9OoIl|S][0-9OoIl|S.,]*?)"; // lazy: lets a trailing 9 act as a misread "g"
 const PLAUSIBLE = { carb: 200, protein: 100, fat: 100, fiber: 60, sodium: 5000 };
 
 export function parseLabel(text) {
@@ -185,29 +266,42 @@ export function parseLabel(text) {
 export async function scanLabel(file, onProgress) {
   const worker = await getWorker(onProgress);
   const keys = ["carb", "protein", "fat", "fiber", "sodium"];
+  const merge = (into, from) => {
+    for (const k of [...keys, "serving", "servingGrams"]) if (into[k] == null && from[k] != null) into[k] = from[k];
+    into.found = keys.filter((k) => into[k] != null);
+    into.missing = keys.filter((k) => into[k] == null);
+    return into;
+  };
 
-  // Pass 1: contrast-stretched, moderate size; automatic layout so a neighbouring column
-  // (ingredients, distributor) isn't merged into the label's lines.
-  await worker.setParameters({ tessedit_pageseg_mode: "3", preserve_interword_spaces: "1" });
-  const cv1 = prepareContrast(await toCanvas(file, 1800));
-  let { data } = await worker.recognize(cv1);
+  onProgress?.({ status: "locating", progress: 0 });
+  const bmp = await createImageBitmap(file);
+  const region = locatePanel(bmp);
+  let text = "";
+
+  // Pass 1: the panel (or the whole photo), enlarged, contrast-stretched, read as one block.
+  await worker.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+  let { data } = await worker.recognize(prepareContrast(cropToCanvas(bmp, region, 2200)));
   let result = parseLabel(data.text || "");
-  let text = data.text || "";
+  text += data.text || "";
 
-  // Pass 2, only if something is missing: adaptive black-and-white at a larger size.
+  // Pass 2: same crop in adaptive black-and-white, when anything is missing.
   if (result.missing.length || !result.serving) {
     onProgress?.({ status: "recognizing text", progress: 0, pass: 2 });
-    await worker.setParameters({ tessedit_pageseg_mode: "6" }); // one block: catches lines the layout pass skipped
-    const cv2 = prepareBinary(await toCanvas(file, 2400));
-    ({ data } = await worker.recognize(cv2));
-    const second = parseLabel(data.text || "");
-    for (const k of [...keys, "serving", "servingGrams"]) if (result[k] == null && second[k] != null) result[k] = second[k];
-    result.found = keys.filter((k) => result[k] != null);
-    result.missing = keys.filter((k) => result[k] == null);
+    ({ data } = await worker.recognize(prepareBinary(cropToCanvas(bmp, region, 2400))));
+    result = merge(result, parseLabel(data.text || ""));
     text += "\n" + (data.text || "");
   }
 
-  // A large preview the client can actually read against the label.
-  const prev = await toCanvas(file, 1400);
-  return { ...result, preview: prev.toDataURL("image/jpeg", 0.8), text };
+  // Pass 3: if the crop was a bad guess, the whole photo with automatic layout.
+  if (region && result.missing.length >= 3) {
+    onProgress?.({ status: "recognizing text", progress: 0, pass: 3 });
+    await worker.setParameters({ tessedit_pageseg_mode: "3" });
+    ({ data } = await worker.recognize(prepareContrast(cropToCanvas(bmp, null, 2200))));
+    result = merge(result, parseLabel(data.text || ""));
+    text += "\n" + (data.text || "");
+  }
+
+  // Preview: the part of the photo the reader used, untouched, large enough to read.
+  const prev = cropToCanvas(bmp, region, 1400);
+  return { ...result, preview: prev.toDataURL("image/jpeg", 0.85), cropped: !!region, text };
 }
