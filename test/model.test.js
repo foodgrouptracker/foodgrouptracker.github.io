@@ -116,3 +116,13 @@ test("label parser handles lost units, swapped letters, and a serving size on th
   assert.equal(r.fiber, 0);
   assert.equal(r.protein, 8);
 });
+
+
+test("serving size keeps the amount and drops merged neighbouring text", () => {
+  assert.equal(parseLabel("Serving size 1 Tbsp (15mL) CROPP Cooperative\nTotal Fat 6g").serving, "1 Tbsp (15mL)");
+  assert.equal(parseLabel("Serving Size 2/3 cup (55g) Distributed by\n").serving, "2/3 cup (55g)");
+  assert.equal(parseLabel("Serving size\n1 package (28g) Ingredients:\n").serving, "1 package (28g)");
+  assert.equal(parseLabel("Serving size 1 cup (240mL)").serving, "1 cup (240mL)");
+  assert.equal(parseLabel("Serving size Sp CROPP Cooperative\nTotal Fat 6g").serving, undefined);
+  assert.equal(parseLabel("Serving size about 3 cookies (34g)").servingGrams, 34);
+});

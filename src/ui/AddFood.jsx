@@ -463,14 +463,17 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
         if (m.status === "recognizing text") setScan((sc) => ({ ...(sc || {}), busy: true, progress: m.progress || 0, status: m.pass === 2 ? "Second look" : "Reading the label" }));
         else if (/loading|initializ/.test(m.status || "")) setScan((sc) => ({ ...(sc || {}), busy: true, progress: 0, status: "Getting the reader ready (first time only)" }));
       });
-      setMacros((prev) => ({
-        carb: r.carb != null ? String(r.carb) : prev.carb,
-        protein: r.protein != null ? String(r.protein) : prev.protein,
-        fat: r.fat != null ? String(r.fat) : prev.fat,
-        fiber: r.fiber != null ? String(r.fiber) : prev.fiber,
-        sodium: r.sodium != null ? String(r.sodium) : prev.sodium,
-      }));
-      if (r.serving && !serving) setServing(r.serving);
+      // A scan describes one label: take everything it read and clear what it didn't,
+      // so scanning a different product never carries the previous one's numbers along.
+      setMacros({
+        carb: r.carb != null ? String(r.carb) : "",
+        protein: r.protein != null ? String(r.protein) : "",
+        fat: r.fat != null ? String(r.fat) : "",
+        fiber: r.fiber != null ? String(r.fiber) : "",
+        sodium: r.sodium != null ? String(r.sodium) : "",
+      });
+      setServing(r.serving || "");
+      setCarbRow(null);
       setScan({ busy: false, preview: r.preview, missing: r.missing, found: r.found, serving: r.serving });
     } catch (e) {
       setScan({ busy: false, error: "Couldn't read that photo. Try again with the panel flat, well lit, and filling the frame." });

@@ -136,20 +136,37 @@ export function parseLabel(text) {
     }
   };
 
-  // Serving size: same line ("Serving size 2/3 cup (55g)") or the next line
+  // Serving size: a quantity and a unit, with an optional (55g) / (240mL). Anything else on the
+  // line (a neighbouring column the OCR merged in) is dropped. No unit found means no serving.
+  const UNITS = "cups?|tbsp|tbs|tablespoons?|tsp|teaspoons?|fl\\.?\\s*oz|oz|ounces?|g|grams?|ml|pieces?|slices?|packages?|pkg|containers?|bars?|bottles?|cans?|scoops?|eggs?|cookies?|crackers?|chips|pouch|patt(?:y|ies)|links?|tortillas?|waffles?|pancakes?|muffins?|bagels?|rolls?|buns?|servings?|pods?|sticks?|squares?|wedges?|tablets?|capsules?|packets?";
+  const QTY = "(?:\\d+\\s+\\d/\\d|\\d+/\\d|\\d+(?:\\.\\d+)?|[½¼¾⅓⅔])";
+  const AMOUNT = new RegExp(`(${QTY}\\s*(?:${UNITS})\\b)\\s*(\\(\\s*(?:about\\s*)?\\d+(?:\\.\\d+)?\\s*(?:g|mL|ml)\\s*\\))?`, "i");
+  const PAREN = /\(\s*(?:about\s*)?(\d+(?:\.\d+)?)\s*(g|mL|ml)\s*\)/i;
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(/serv\w*\.?\s*s[il1]ze[:\s]*(.*)$/i);
-    if (m) {
-      let val = m[1].trim();
-      if (val.length < 3 && lines[i + 1]) val = lines[i + 1].trim();
-      val = val.replace(/\s{2,}/g, " ").replace(/[|]/g, "").replace(/\bml\b/i, "mL").slice(0, 40);
-      if (val) {
-        out.serving = val;
-        const g = val.match(/\(?\s*([0-9OoIl]+(?:\.[0-9]+)?)\s*g\b/i);
+    if (!m) continue;
+    // Use the next line only when the "Serving size" line itself carries no amount, and never
+    // a line that is clearly a nutrient row.
+    const nutrientish = /fat|carb|protein|sodium|fib|cholesterol|calories|sugars|potassium|vitamin|calcium|iron/i;
+    const candidates = [m[1]];
+    if (!/\d/.test(m[1]) && lines[i + 1] && !nutrientish.test(lines[i + 1])) candidates.push(lines[i + 1]);
+    for (const cand of candidates) {
+      if (nutrientish.test(cand) && !/serv/i.test(lines[i])) continue;
+      const a = cand.match(AMOUNT);
+      if (a) {
+        out.serving = (a[1].replace(/\s+/g, " ") + (a[2] ? " " + a[2].replace(/\s+/g, "") : "")).replace(/\bml\b/i, "mL").slice(0, 32);
+        const g = out.serving.match(/\(\s*(?:about\s*)?(\d+(?:\.\d+)?)\s*g\s*\)/i);
         if (g) out.servingGrams = num(g[1]);
+        break;
       }
-      break;
+      const pr = cand.match(PAREN);
+      if (pr) {
+        out.serving = `(${pr[1]}${pr[2].toLowerCase() === "g" ? "g" : "mL"})`;
+        if (pr[2].toLowerCase() === "g") out.servingGrams = num(pr[1]);
+        break;
+      }
     }
+    break;
   }
 
   grab(`${FUZ.total}\\s*${FUZ.carb}`, "carb", "g|9|q");
@@ -167,10 +184,11 @@ export function parseLabel(text) {
 
 export async function scanLabel(file, onProgress) {
   const worker = await getWorker(onProgress);
-  await worker.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }); // one block of text
   const keys = ["carb", "protein", "fat", "fiber", "sodium"];
 
-  // Pass 1: contrast-stretched, moderate size.
+  // Pass 1: contrast-stretched, moderate size; automatic layout so a neighbouring column
+  // (ingredients, distributor) isn't merged into the label's lines.
+  await worker.setParameters({ tessedit_pageseg_mode: "3", preserve_interword_spaces: "1" });
   const cv1 = prepareContrast(await toCanvas(file, 1800));
   let { data } = await worker.recognize(cv1);
   let result = parseLabel(data.text || "");
@@ -179,6 +197,7 @@ export async function scanLabel(file, onProgress) {
   // Pass 2, only if something is missing: adaptive black-and-white at a larger size.
   if (result.missing.length || !result.serving) {
     onProgress?.({ status: "recognizing text", progress: 0, pass: 2 });
+    await worker.setParameters({ tessedit_pageseg_mode: "6" }); // one block: catches lines the layout pass skipped
     const cv2 = prepareBinary(await toCanvas(file, 2400));
     ({ data } = await worker.recognize(cv2));
     const second = parseLabel(data.text || "");
