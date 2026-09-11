@@ -115,7 +115,13 @@
 
   <section>
     <h2>Standard plan</h2>
-    <p class="hint">The everyday plan. One box = one serving from the food lists. Calories are estimated from the boxes; you can type over the estimate. Set a row to 0 to leave that food group out of the client's tracker entirely.</p>
+    <p class="hint">Pick a starting point or one of your saved plans, then adjust anything. One box = one serving. Calories are estimated from the boxes; you can type over the estimate. Set a row to 0 to leave that food group out of the client's tracker entirely.</p>
+    <div class="two" style="grid-template-columns:1fr auto auto;align-items:end">
+      <div><label for="preset">Start from</label><select class="full" id="preset"></select></div>
+      <button class="btn ghost small" id="savePlan" type="button" style="margin-bottom:1px">Save this plan…</button>
+      <button class="btn link small" id="deletePlan" type="button" style="margin-bottom:1px;display:none">Delete saved</button>
+    </div>
+    <p class="hint" id="presetNote" style="margin-top:6px"></p>
     <div class="two">
       <div><label for="bName">Plan name</label><input type="text" id="bName" value="Standard" maxlength="24" /></div>
       <div><label for="bKcal">Calories</label><input type="number" id="bKcal" min="0" step="50" /><div class="est" id="bEst"></div></div>
@@ -274,6 +280,10 @@ function renderVariants(){
     card.innerHTML=`
       <div class="head"><h2 style="font-size:15px;margin:0">Variant ${i+1}</h2>
         <button class="btn link" type="button" data-remove="${i}">Remove</button></div>
+      <div class="two" style="grid-template-columns:1fr auto;align-items:end">
+        <div><label>Load a saved variant</label><select class="full" data-vload="${i}"><option value="">Choose…</option>${savedVariants().map((sv,k)=>`<option value="${k}">${esc(sv.name)} (${Number(sv.kcal).toLocaleString()} cal)</option>`).join("")}</select></div>
+        <button class="btn ghost small" type="button" data-vsave="${i}" style="margin-bottom:1px">Save variant…</button>
+      </div>
       <div class="two">
         <div><label>Variant name</label><input type="text" data-vname="${i}" value="${esc(v.name)}" maxlength="24" placeholder="e.g. Active day" /></div>
         <div><label>Calories</label><input type="number" data-vkcal="${i}" value="${v.kcal}" min="0" step="50" /><div class="est" data-vest="${i}"></div></div>
@@ -292,6 +302,20 @@ function renderVariants(){
     renderSchedOpts(i, card.querySelector(`[data-vsopts="${i}"]`));
   });
   host.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{ state.variants.splice(+b.dataset.remove,1); previewVariant=0; renderVariants(); update(); });
+  host.querySelectorAll("[data-vload]").forEach(sel=>sel.onchange=()=>{
+    const sv=savedVariants()[+sel.value]; if(!sv) return;
+    const v=state.variants[+sel.dataset.vload];
+    v.name=sv.name; v.kcal=sv.kcal; v.counts={...sv.counts}; v.schedule=sv.schedule?JSON.parse(JSON.stringify(sv.schedule)):null;
+    renderVariants(); update();
+  });
+  host.querySelectorAll("[data-vsave]").forEach(b=>b.onclick=()=>{
+    const v=state.variants[+b.dataset.vsave];
+    const name=(prompt("Save this variant as:", v.name||"Variant")||"").trim(); if(!name) return;
+    const list=savedVariants().filter(x=>x.name.toLowerCase()!==name.toLowerCase());
+    list.push({ name, kcal:v.kcal, counts:{...v.counts}, schedule:v.schedule?JSON.parse(JSON.stringify(v.schedule)):null });
+    localStorage.setItem(LS_VARIANTS, JSON.stringify(list));
+    v.name=name; renderVariants(); update();
+  });
   host.querySelectorAll("[data-vname]").forEach(inp=>inp.oninput=()=>{ state.variants[+inp.dataset.vname].name=inp.value; update(); });
   host.querySelectorAll("[data-vkcal]").forEach(inp=>inp.oninput=()=>{ state.variants[+inp.dataset.vkcal].kcal=Math.max(0,+inp.value||0); update(false); });
   host.querySelectorAll("[data-vstype]").forEach(sel=>sel.onchange=()=>{
@@ -417,6 +441,64 @@ function update(syncKcal=true){
   renderToday(plan); renderPlan(plan);
   refreshShowOptions(plan);
 }
+
+// ---- starting points and saved plans ----------------------------------------------
+// Starting points are scaled from a 2,000-calorie pattern (8/3/3/3/8/6) and rounded to whole
+// servings, with vegetables held at three or more. They are drafts for the dietitian to review.
+const PRESETS=[
+  {kcal:1200, counts:{starch:5, fruit:3, milk:2, veg:3, meat:4,  fat:3,  water:8}},
+  {kcal:1600, counts:{starch:7, fruit:3, milk:2, veg:4, meat:5,  fat:5,  water:8}},
+  {kcal:2000, counts:{starch:8, fruit:3, milk:3, veg:3, meat:8,  fat:6,  water:8}},
+  {kcal:2400, counts:{starch:10,fruit:4, milk:3, veg:4, meat:9,  fat:7,  water:8}},
+  {kcal:2800, counts:{starch:12,fruit:5, milk:3, veg:5, meat:10, fat:8,  water:8}},
+  {kcal:3200, counts:{starch:14,fruit:5, milk:4, veg:5, meat:11, fat:9,  water:8}},
+  {kcal:3600, counts:{starch:16,fruit:6, milk:4, veg:5, meat:12, fat:11, water:8}},
+];
+const LS_PLANS="fgt:cfg:plans", LS_VARIANTS="fgt:cfg:variants";
+function savedPlans(){ try{ return JSON.parse(localStorage.getItem(LS_PLANS)||"[]"); }catch{ return []; } }
+function savedVariants(){ try{ return JSON.parse(localStorage.getItem(LS_VARIANTS)||"[]"); }catch{ return []; } }
+function refreshPresetList(selected){
+  const sel=document.getElementById("preset");
+  const mine=savedPlans();
+  sel.innerHTML = `<option value="">Choose…</option>`
+    + `<optgroup label="Starting points">${PRESETS.map((p,i)=>`<option value="p:${i}">${p.kcal.toLocaleString()} calories</option>`).join("")}</optgroup>`
+    + (mine.length? `<optgroup label="Your saved plans">${mine.map((p,i)=>`<option value="s:${i}">${esc(p.name)} (${Number(p.kcal).toLocaleString()} cal)</option>`).join("")}</optgroup>`:"");
+  sel.value=selected||"";
+  document.getElementById("deletePlan").style.display = (selected||"").startsWith("s:") ? "" : "none";
+}
+function applyTemplate(t, name){
+  state.base.name=name||state.base.name||"Standard";
+  state.base.kcal=t.kcal;
+  state.base.counts={...t.counts};
+  rowsInto(document.getElementById("baseRows"), state.base, update);
+  document.getElementById("bName").value=state.base.name;
+  update();
+}
+document.getElementById("preset").onchange=e=>{
+  const v=e.target.value; const note=document.getElementById("presetNote");
+  if(v.startsWith("p:")){ applyTemplate(PRESETS[+v.slice(2)], "Standard"); note.textContent="Starting point: scaled from a 2,000-calorie pattern and rounded to whole servings. Review every row before sending."; }
+  else if(v.startsWith("s:")){ const p=savedPlans()[+v.slice(2)]; applyTemplate(p, p.name); note.textContent="Loaded from your saved plans."; }
+  else note.textContent="";
+  refreshPresetList(v);
+};
+document.getElementById("savePlan").onclick=()=>{
+  const name=(prompt("Save this plan as:", state.base.name||"Standard")||"").trim(); if(!name) return;
+  const list=savedPlans().filter(p=>p.name.toLowerCase()!==name.toLowerCase());
+  list.push({ name, kcal:state.base.kcal, counts:{...state.base.counts} });
+  localStorage.setItem(LS_PLANS, JSON.stringify(list));
+  state.base.name=name; document.getElementById("bName").value=name;
+  refreshPresetList("s:"+(list.length-1));
+  document.getElementById("presetNote").textContent="Saved in this browser. Saved plans are yours; they never travel in a client's link.";
+  update();
+};
+document.getElementById("deletePlan").onclick=()=>{
+  const v=document.getElementById("preset").value; if(!v.startsWith("s:")) return;
+  const list=savedPlans(); const p=list[+v.slice(2)];
+  if(!confirm(`Delete saved plan "${p.name}"? The form keeps its current values.`)) return;
+  list.splice(+v.slice(2),1); localStorage.setItem(LS_PLANS, JSON.stringify(list));
+  refreshPresetList(""); document.getElementById("presetNote").textContent="";
+};
+refreshPresetList("");
 
 // ---- printable sheets -----------------------------------------------------------
 const SHEET_ORDER=["original","a","b","c"];
