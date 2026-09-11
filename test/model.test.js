@@ -135,3 +135,13 @@ test("a trailing 9 stands in for a misread g on a two-column label", () => {
   assert.equal(r.carb, 18);
   assert.equal(r.sodium, 410);
 });
+
+
+test("garbled row names still match by similarity", () => {
+  const r = parseLabel("Serving size 1 cup (240mL)\nT0tal Fal 2g 3% 4.5g 6%\nSaturaled Fat 1g\nSodiurn 410mg 18%\nTotaI Cart. 18g 7%\nDielary Fiher 3g 11%\nProtem 8g 13%");
+  assert.equal(r.fat, 2);
+  assert.equal(r.sodium, 410);
+  assert.equal(r.carb, 18);
+  assert.equal(r.fiber, 3);
+  assert.equal(r.protein, 8);
+});

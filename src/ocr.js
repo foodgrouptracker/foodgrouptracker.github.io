@@ -259,8 +259,44 @@ export function parseLabel(text) {
   grab(`^${FUZ.carb}`, "carb", "g|9|q");
   grab(`^${FUZ.fat}`, "fat", "g|9|q");
 
+  // Fallback for garbled label words ("T0tal Fal 2g 3%"): compare the letters before the first
+  // digit with the known row names and take the first number on the line.
+  const TARGETS = { fat: ["totalfat"], sodium: ["sodium"], carb: ["totalcarbohydrate", "totalcarb", "totalcarbs"], fiber: ["dietaryfiber", "dietaryfibre", "fiber", "fibre"], protein: ["protein"] };
+  const ROWUNITS = { fat: "g|9|q", carb: "g|9|q", fiber: "g|9|q", protein: "g|9|q", sodium: "mg|m9|rng" };
+  for (const key of Object.keys(TARGETS)) {
+    if (out[key] != null) continue;
+    let best = null;
+    for (const l of lines) {
+      const cut = l.search(/[0-9OoIl|S][0-9OoIl|S.,]*\s*(?:m?g|9|q)\b/i);
+      const prefix = (cut > 0 ? l.slice(0, cut) : l).toLowerCase().replace(/[^a-z]/g, "").replace(/rn/g, "m").replace(/vv/g, "w");
+      if (prefix.length < 4) continue;
+      for (const tgt of TARGETS[key]) {
+        const sim = similarity(prefix.slice(0, tgt.length + 2), tgt);
+        if (sim >= 0.7 && (!best || sim > best.sim)) best = { sim, line: l, cut };
+      }
+    }
+    if (best && best.cut > 0) {
+      const m = best.line.slice(best.cut).match(new RegExp(`^${NUMTOK}\\s*(?:${ROWUNITS[key]})\\b`, "i")) || best.line.slice(best.cut).match(new RegExp(`^${NUMTOK}`, "i"));
+      if (m) {
+        let v = num(m[1]);
+        if (v != null && v > PLAUSIBLE[key] && /9$/.test(String(Math.round(v)))) v = Math.floor(v / 10);
+        if (v != null && v <= PLAUSIBLE[key]) out[key] = Math.round(v * 10) / 10;
+      }
+    }
+  }
+
   const keys = ["carb", "protein", "fat", "fiber", "sodium"];
   return { ...out, found: keys.filter((k) => out[k] != null), missing: keys.filter((k) => out[k] == null) };
+}
+
+// Normalised edit-distance similarity, 0..1.
+function similarity(a, b) {
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  const d = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return 1 - d[m][n] / Math.max(m, n);
 }
 
 export async function scanLabel(file, onProgress) {
@@ -280,14 +316,14 @@ export async function scanLabel(file, onProgress) {
 
   // Pass 1: the panel (or the whole photo), enlarged, contrast-stretched, read as one block.
   await worker.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
-  let { data } = await worker.recognize(prepareContrast(cropToCanvas(bmp, region, 2200)));
+  let { data } = await worker.recognize(prepareContrast(cropToCanvas(bmp, region, 2400)));
   let result = parseLabel(data.text || "");
   text += data.text || "";
 
   // Pass 2: same crop in adaptive black-and-white, when anything is missing.
   if (result.missing.length || !result.serving) {
     onProgress?.({ status: "recognizing text", progress: 0, pass: 2 });
-    ({ data } = await worker.recognize(prepareBinary(cropToCanvas(bmp, region, 2400))));
+    ({ data } = await worker.recognize(prepareBinary(cropToCanvas(bmp, region, 3000))));
     result = merge(result, parseLabel(data.text || ""));
     text += "\n" + (data.text || "");
   }

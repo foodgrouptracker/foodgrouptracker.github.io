@@ -454,6 +454,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
   const opts = initial?.opts || {};
   const [scan, setScan] = useState(null); // {busy, progress, status, preview, missing, error}
   const [zoom, setZoom] = useState(false);
+  const [showText, setShowText] = useState(false);
 
   const onPhoto = async (file) => {
     if (!file) return;
@@ -475,7 +476,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
       });
       setServing(r.serving || "");
       setCarbRow(null);
-      setScan({ busy: false, preview: r.preview, cropped: r.cropped, missing: r.missing, found: r.found, serving: r.serving });
+      setScan({ busy: false, preview: r.preview, cropped: r.cropped, missing: r.missing, found: r.found, serving: r.serving, text: r.text });
     } catch (e) {
       setScan({ busy: false, error: "Couldn't read that photo. Try again with the panel flat, well lit, and filling the frame." });
     }
@@ -548,6 +549,28 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
                 {scan.missing?.length > 0 && <> Couldn't find {scan.missing.map((k) => MISSING_LABEL[k]).join(", ")}; type {scan.missing.length === 1 ? "it" : "those"} in.</>}
                 {!scan.serving && <> Couldn't read the serving size.</>}
               </p>
+              {scan.missing?.length > 0 && (
+                <div className="mt-1">
+                  <button type="button" onClick={() => setShowText((v) => !v)} className="text-xs font-bold focus:outline-none focus-visible:ring-2" style={{ color: T.accentDeep }}>
+                    {showText ? "Hide what the reader saw" : "Show what the reader saw"}
+                  </button>
+                  {showText && (
+                    <div className="mt-1">
+                      <pre className="text-xs rounded-lg p-2 overflow-auto" style={{ background: T.surface, border: `1px solid ${T.hair}`, maxHeight: 200, whiteSpace: "pre-wrap" }}>
+                        {(scan.text || "").trim() || "(nothing)"}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard?.writeText(scan.text || "")}
+                        className="mt-1 text-xs font-bold focus:outline-none focus-visible:ring-2"
+                        style={{ color: T.accentDeep }}
+                      >
+                        Copy text
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {zoom && scan?.preview && (
