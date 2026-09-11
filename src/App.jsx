@@ -310,10 +310,10 @@ export default function App() {
             key={toast.key}
             onClick={() => setToast(null)}
             className="fgt-toast pointer-events-auto mx-5 w-full max-w-md rounded-xl px-4 py-3 text-left text-sm focus:outline-none focus-visible:ring-2"
-            style={{ background: T.accentDeep, color: "#fff", boxShadow: "0 12px 20px -8px rgba(34,48,43,0.35)" }}
+            style={{ background: T.surface, color: T.ink, borderLeft: `4px solid ${T.accent}`, boxShadow: "0 8px 20px -6px rgba(34,48,43,0.25)" }}
           >
-            <div className="font-bold">{toast.title}</div>
-            {toast.detail && <div className="mt-0.5 text-xs" style={{ opacity: 0.9 }}>{toast.detail}</div>}
+            <div className="font-bold" style={{ color: T.accentDeep }}>{toast.title}</div>
+            {toast.detail && <div className="mt-0.5 text-xs" style={{ color: T.muted }}>{toast.detail}</div>}
           </button>
         </div>
       )}

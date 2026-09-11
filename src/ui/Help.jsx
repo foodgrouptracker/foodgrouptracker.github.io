@@ -45,7 +45,7 @@ export const TOPICS = [
       "Tap Add food and type a plain name: \"banana,\" \"whole wheat bread,\" \"chicken breast roasted.\" The app searches a built-in database of about 7,700 foods from the U.S. Department of Agriculture. Tap a food, then tap the amount you ate, like 1 cup or 1 medium or 3 oz. Each amount shows the boxes it will check.",
       "History is everything you've logged before. It's one tap to log the same thing again, and matches from your history appear at the top of any search.",
       "Recipes are your own dishes, built from ingredients. See Mixed foods.",
-      "New is for a packaged food: type the serving size and the five numbers from its Nutrition Facts panel, and the app works out the boxes. It's kept in your History after that.",
+      "New is for a packaged food: photograph its Nutrition Facts panel, or type the serving size and the five numbers, and the app works out the boxes. The photo is read on your phone and not kept. It's in your History after that.",
       "Nothing about adding a food needs a book or a chart. The database and the label carry the numbers; the app does the counting.",
     ],
   },

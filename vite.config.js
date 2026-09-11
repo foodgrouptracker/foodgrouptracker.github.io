@@ -39,7 +39,15 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,woff2,json}"],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        globIgnores: ["configure/**"],
+        globIgnores: ["configure/**", "ocr/**"],
+        runtimeCaching: [
+          {
+            // the OCR engine and language model: fetched on first scan, then kept for offline use
+            urlPattern: ({ url }) => url.pathname.includes("/ocr/"),
+            handler: "CacheFirst",
+            options: { cacheName: "fgt-ocr", expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+          },
+        ],
         navigateFallbackDenylist: [/\/configure\//],
       },
     }),

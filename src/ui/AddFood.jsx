@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, X, Search, Clock, BookOpen, Tag } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, X, Search, Clock, BookOpen, Tag, Camera } from "lucide-react";
 import { CARB_ROWS, GROUPS, addedText, deriveFromLabel, halfText, perSummary, roundBoxes, suggestCarbRow } from "../model.js";
 import { T } from "../theme.js";
 import { loadUsda, searchUsda, macrosFor, portionsFor, convertOpts } from "../usda.js";
+import { scanLabel } from "../ocr.js";
 import { PreviewAdd, ServingsPicker, Tags } from "./shared.jsx";
 
 // Add food: the USDA database is the backbone. Search is the default; History is everything
@@ -451,6 +452,30 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
   const [carbRow, setCarbRow] = useState(initial?.carbRow || null);
   const [servings, setServings] = useState(1);
   const opts = initial?.opts || {};
+  const [scan, setScan] = useState(null); // {busy, progress, status, thumbnail, missing, error}
+
+  const onPhoto = async (file) => {
+    if (!file) return;
+    setScan({ busy: true, progress: 0, status: "Reading the label" });
+    try {
+      const r = await scanLabel(file, (m) => {
+        if (m.status === "recognizing text") setScan((sc) => ({ ...(sc || {}), busy: true, progress: m.progress || 0, status: "Reading the label" }));
+        else if (/loading|initializ/.test(m.status || "")) setScan((sc) => ({ ...(sc || {}), busy: true, progress: 0, status: "Getting the reader ready (first time only)" }));
+      });
+      setMacros((prev) => ({
+        carb: r.carb != null ? String(r.carb) : prev.carb,
+        protein: r.protein != null ? String(r.protein) : prev.protein,
+        fat: r.fat != null ? String(r.fat) : prev.fat,
+        fiber: r.fiber != null ? String(r.fiber) : prev.fiber,
+        sodium: r.sodium != null ? String(r.sodium) : prev.sodium,
+      }));
+      if (r.serving && !serving) setServing(r.serving);
+      setScan({ busy: false, thumbnail: r.thumbnail, missing: r.missing, found: r.found });
+    } catch (e) {
+      setScan({ busy: false, error: "Couldn't read that photo. Try again with the panel flat, well lit, and filling the frame." });
+    }
+  };
+  const MISSING_LABEL = { carb: "carbohydrate", protein: "protein", fat: "fat", fiber: "fiber", sodium: "sodium" };
 
   const m = { carb: Number(macros.carb) || 0, protein: Number(macros.protein) || 0, fat: Number(macros.fat) || 0 };
   const row = carbRow || suggestCarbRow(m);
@@ -489,9 +514,38 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
           USDA FoodData Central: {initial.desc}. Numbers below are for {initial.serving}; edit them if you ate a different amount.
         </p>
       ) : (
-        <p className="text-xs mt-3" style={{ color: T.muted }}>
-          Per serving, from the Nutrition Facts panel. The app works out the boxes from these numbers.
-        </p>
+        <div className="mt-3">
+          <label
+            className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold cursor-pointer focus-within:ring-2"
+            style={{ background: scan?.busy ? T.tint : T.accent, color: scan?.busy ? T.accentDeep : "#fff", opacity: scan?.busy ? 0.9 : 1 }}
+          >
+            <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+            {scan?.busy ? `${scan.status}${scan.progress ? ` ${Math.round(scan.progress * 100)}%` : "…"}` : scan?.thumbnail ? "Scan again" : "Scan the Nutrition Facts label"}
+            <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={!!scan?.busy} onChange={(e) => onPhoto(e.target.files?.[0])} />
+          </label>
+          {scan?.busy && (
+            <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: T.hair }} aria-hidden="true">
+              <div className="h-full" style={{ width: `${Math.round((scan.progress || 0) * 100)}%`, background: T.accent, transition: "width 200ms" }} />
+            </div>
+          )}
+          {scan?.error && (
+            <p className="text-xs mt-2" role="status" style={{ color: "#9A3B2E" }}>
+              {scan.error}
+            </p>
+          )}
+          {scan?.thumbnail && (
+            <div className="mt-2 flex gap-3 items-start">
+              <img src={scan.thumbnail} alt="The label you scanned" className="rounded-lg" style={{ width: 96, height: 96, objectFit: "cover", border: `1px solid ${T.hair}` }} />
+              <p className="text-xs" style={{ color: T.muted }}>
+                Check the numbers below against the label and fix anything that's off.
+                {scan.missing?.length > 0 && <> Couldn't find {scan.missing.map((k) => MISSING_LABEL[k]).join(", ")}; type {scan.missing.length === 1 ? "it" : "those"} in.</>}
+              </p>
+            </div>
+          )}
+          <p className="text-xs mt-3" style={{ color: T.muted }}>
+            Or type them: per serving, from the Nutrition Facts panel. The app works out the boxes from these numbers. Photos are read on your phone and not kept.
+          </p>
+        </div>
       )}
 
       <div className="grid grid-cols-3 gap-2 mt-2">

@@ -4,6 +4,7 @@ import {
   encodePlan, decodePlan, normalizePlan, scheduledVariant, deriveFromLabel, suggestCarbRow,
   roundBoxes, applyExchanges, normalizeEntries, halfText, tagsFor,
 } from "../src/model.js";
+import { parseLabel } from "../src/ocr.js";
 
 const plan = {
   v: 1,
@@ -88,4 +89,17 @@ test("dairy on the Milk row is sized by calories at its fat level", () => {
   assert.equal(roundBoxes("meat", greek.per.meat), 0);
   const sweet = deriveFromLabel({ carb: 24, protein: 6, fat: 2 }, "milk"); // flavored low-fat yogurt
   assert.equal(roundBoxes("milk", sweet.per.milk), 1.5);
+});
+
+
+test("label parser survives typical OCR noise", () => {
+  const text = "Nutrition Facts\nServing size 2/3 cup (55g)\nCalories 230\nTotal Fat 8g 10%\nSaturated Fat lg 5%\nTrans Fat Og\nSodium l60mg 7%\nTotal Carbohydrate 37g 13%\nDietary Fiber 4g 14%\nTotal Sugars 12g\nProtein 3g\n";
+  const r = parseLabel(text);
+  assert.equal(r.carb, 37);
+  assert.equal(r.protein, 3);
+  assert.equal(r.fat, 8);
+  assert.equal(r.fiber, 4);
+  assert.equal(r.sodium, 160);
+  assert.equal(r.serving, "2/3 cup (55g)");
+  assert.deepEqual(r.missing, []);
 });
