@@ -161,7 +161,8 @@
         const ry = yb + i * rowH, yc = ry + rowH / 2, n = r.solid + r.dashed;
         if (i % 2 === 1) { fill(d, C.rowTint); d.rect(x + 0.5, ry, cw - 1, rowH, "F"); }
         text(d, x + 9, vc(yc, 7.1), rowLabel(r), { size: 7.1 });
-        stroke(d, C.faint); d.setLineWidth(0.5); d.line(x + 0.5, ry + rowH, x + cw - 0.5, ry + rowH);
+        // row lines match the cell dividers in colour and weight so the grid reads as one
+        stroke(d, C.box); d.setLineWidth(0.6); d.line(x + 0.5, ry + rowH, x + cw - 0.5, ry + rowH);
         const cx0 = x + labelW, cellW = (x + cw - 0.5 - cx0) / n;
         d.setLineWidth(0.6);
         for (let k = 0; k <= n; k++) {
