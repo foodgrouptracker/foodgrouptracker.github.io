@@ -105,8 +105,14 @@
     fill(d, C.tint);
     d.roundedRect(x, ytop, w, bandH, 4, 4, "F");
     d.rect(x, ytop + bandH - 4, w, 4, "F");
+    // accent bar, clipped to the card's rounded outline so its corner follows the curve
+    d.saveGraphicsState();
+    d.roundedRect(x, ytop, w, h, 4, 4, null);
+    d.clip();
+    d.discardPath();
     fill(d, C.accent);
     d.rect(x, ytop, 3, bandH, "F");
+    d.restoreGraphicsState();
     const ts = bandH * 0.5;
     text(d, x + 9, vc(ytop + bandH / 2, ts), title, { size: ts, bold: true, color: C.accentDeep });
     if (rightLabel) text(d, x + w - 8, vc(ytop + bandH / 2, bandH * 0.38), rightLabel, { size: bandH * 0.38, color: C.muted, align: "right" });
