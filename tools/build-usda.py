@@ -53,6 +53,8 @@ def load(dirpath, data_type):
 def mean(xs):
     return sum(xs) / len(xs) if xs else None
 
+DESSERT_DAIRY = ("ice cream", "ice milk", "frozen", "sherbet", "sorbet", "shake", "pudding", "custard", "eggnog", "whipped", "dessert", "topping")
+
 def carb_row(cat, desc, c, p, f):
     d = desc.lower()
     if cat == "9":
@@ -60,13 +62,14 @@ def carb_row(cat, desc, c, p, f):
     if cat == "11":
         return "starch" if (c or 0) >= 10 else "veg"
     if cat == "1":
-        if "cheese" in d or "egg" in d or "cream" in d and "ice" not in d:
+        # Milk / Yogurt row is for milk, yogurt, kefir. Cheese, eggs, cream and dairy desserts are
+        # counted as protein, fat, or carbohydrate in the food lists.
+        if "cheese" in d or "egg" in d or ("cream" in d and "ice" not in d) or any(x in d for x in DESSERT_DAIRY):
             return "starch"
         if (c or 0) >= 3.5 and (p or 0) >= 2.5:
             return "milk"
         return "starch"
-    if cat == "16" and ("soymilk" in d or "soy milk" in d):
-        return "milk"
+    # Soy, almond, rice and coconut milks are carbohydrate (+ fat) choices in the food lists, not Milk.
     return "starch"
 
 def build():
@@ -96,12 +99,21 @@ def build():
         cat = r["food_category_id"]
         pl = sorted(set(ports.get(fid, [])), key=lambda t: (t[2], t[1]))[:6]
         dl = desc.lower()
-        by_weight = cat in {"5", "7", "10", "13", "15", "17"} or (cat == "1" and "cheese" in dl and not any(x in dl for x in ("cottage", "ricotta", "cream cheese", "sauce", "spread")))
+        # 1 oz = 1 protein serving for meat, poultry, fish and cheese. Not for items the lists count
+        # by the piece or by protein (bacon, hot dogs, sausages) or that are mostly breading/sauce.
+        piece_meats = ("bacon", "frankfurter", "hot dog", "sausage", "bratwurst", "kielbasa", "chorizo", "knockwurst", "wiener",
+                       "salad", "breaded", "batter", "with gravy", "in sauce", "casserole", "nugget", "patty", "meatball", "stuffed")
+        by_weight = (cat in {"5", "7", "10", "13", "15", "17"} and not any(x in dl for x in piece_meats)) or (
+            cat == "1" and "cheese" in dl and not any(x in dl for x in ("cottage", "ricotta", "cream cheese", "sauce", "spread")))
+        # Protein counted separately from the carbohydrate serving (the lists do this for beans,
+        # combination dishes, soups and restaurant food); grains and breads keep protein inside the starch.
+        sep = cat in {"16", "22", "21", "25", "6"}
+        drink = any(x in dl for x in ("soymilk", "soy milk", "almond milk", "rice milk", "oat milk", "cashew milk", "coconut milk beverage", "milk substitute", "non-dairy milk", "nondairy milk"))
         out.append([
             int(fid), desc, int(cat), carb_row(cat, desc, c, p, f),
             round(c or 0, 1), round(p or 0, 1), round(f or 0, 1),
             round(mean(n.get("fi")) or 0, 1), int(round(mean(n.get("na")) or 0)), int(round(k)),
-            1 if cat == "16" else 0, src, [[lab, g] for lab, g, _ in pl], 1 if by_weight else 0,
+            1 if sep else 0, src, [[lab, g] for lab, g, _ in pl], 1 if by_weight else 0, 1 if drink else 0,
         ])
 
     for fid in fd_keep:
@@ -115,7 +127,7 @@ def build():
     payload = {
         "v": 1,
         "source": "USDA FoodData Central: Foundation Foods (2026-04) and SR Legacy (2018-04). Public domain.",
-        "fields": ["id", "desc", "cat", "row", "carb", "protein", "fat", "fiber", "sodium", "kcal", "legume", "src", "portions", "byWeight"],
+        "fields": ["id", "desc", "cat", "row", "carb", "protein", "fat", "fiber", "sodium", "kcal", "sep", "src", "portions", "byWeight", "drink"],
         "categories": {int(k): v for k, v in cats.items() if k not in SKIP_CATS},
         "foods": out,
     }

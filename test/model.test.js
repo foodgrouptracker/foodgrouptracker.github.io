@@ -46,9 +46,12 @@ test("label conversion matches the book on common foods", () => {
   assert.deepEqual(boxes({ carb: 0, protein: 0, fat: 0 }), {});                             // diet soda: free
 });
 
-test("fiber and sodium tags use the food-list thresholds", () => {
-  assert.deepEqual(tagsFor({ fiber: 3, sodium: 100 }), ["Good source of fiber"]);
+test("fiber and sodium tags use the food-list key", () => {
+  assert.deepEqual(tagsFor({ fiber: 3.5, sodium: 100 }), ["Good source of fiber"]);
+  assert.deepEqual(tagsFor({ fiber: 3, sodium: 100 }), []); // "more than 3 g"
   assert.deepEqual(tagsFor({ fiber: 1, sodium: 480 }), ["High in sodium"]);
+  assert.deepEqual(tagsFor({ fiber: 1, sodium: 550, combo: true }), []); // combination dishes: more than 600 mg
+  assert.deepEqual(tagsFor({ fiber: 1, sodium: 650, combo: true }), ["High in sodium"]);
 });
 
 test("interchange spill, then past-the-plan on limited rows, silent on free rows", () => {
@@ -78,7 +81,7 @@ test("meat, fish and cheese count by weight: 1 oz = 1 Meat", () => {
   assert.equal(roundBoxes("meat", r.per.meat), 3);
   const c = deriveFromLabel({ carb: 0.9, protein: 6.5, fat: 9.4 }, "starch", { meatByWeightOz: 1 });
   assert.equal(roundBoxes("meat", c.per.meat), 1);
-  assert.equal(roundBoxes("fat", c.per.fat), 1);
+  assert.equal(roundBoxes("fat", c.per.fat), 0); // a high-fat protein choice carries its fat (the food lists count no extra Fat for cheese)
 });
 
 test("dairy on the Milk row is sized by calories at its fat level", () => {
@@ -87,8 +90,12 @@ test("dairy on the Milk row is sized by calories at its fat level", () => {
   const greek = deriveFromLabel({ carb: 6.1, protein: 17.5, fat: 0.7 }, "milk");
   assert.equal(roundBoxes("milk", greek.per.milk), 1);
   assert.equal(roundBoxes("meat", greek.per.meat), 0);
-  const sweet = deriveFromLabel({ carb: 24, protein: 6, fat: 2 }, "milk"); // flavored low-fat yogurt
-  assert.equal(roundBoxes("milk", sweet.per.milk), 1.5);
+  const sweet = deriveFromLabel({ carb: 24, protein: 6, fat: 2 }, "milk"); // flavored low-fat yogurt: "1 milk + 1 carb" in the food lists
+  assert.equal(roundBoxes("milk", sweet.per.milk), 1);
+  assert.equal(roundBoxes("starch", sweet.per.starch), 1);
+  const choc = deriveFromLabel({ carb: 26, protein: 8, fat: 2.5 }, "milk"); // low-fat chocolate milk
+  assert.equal(roundBoxes("milk", choc.per.milk), 1);
+  assert.equal(roundBoxes("starch", choc.per.starch), 1);
 });
 
 
@@ -160,4 +167,21 @@ test("real photo: values survive stray brackets, leading noise, <1g, and unitles
   assert.equal(b.fiber, 0.5);           // "<ig"
   assert.equal(b.protein, 5);
   assert.equal(b.sure.protein, true);
+});
+
+
+test("vegetables count by volume; plant milks count carb and fat only", () => {
+  const lettuce = deriveFromLabel({ carb: 1.5, protein: 0.6, fat: 0.1 }, "veg", { vegServings: 1 });
+  assert.equal(roundBoxes("veg", lettuce.per.veg), 1);
+  const soy = deriveFromLabel({ carb: 9.7, protein: 7.8, fat: 4.7 }, "starch", { noProtein: true });
+  assert.equal(roundBoxes("meat", soy.per.meat), 0);
+  assert.equal(roundBoxes("fat", soy.per.fat), 1);
+});
+
+test("beans and combination dishes count protein separately from the carbohydrate serving", () => {
+  const beans = deriveFromLabel({ carb: 20.4, protein: 7.6, fat: 0.5 }, "starch", { proteinSeparate: true });
+  assert.equal(roundBoxes("meat", beans.per.meat), 1);
+  const lasagna = deriveFromLabel({ carb: 33, protein: 18, fat: 12 }, "starch", { proteinSeparate: true });
+  assert.equal(roundBoxes("meat", lasagna.per.meat), 2);
+  assert.equal(roundBoxes("fat", lasagna.per.fat), 0);
 });

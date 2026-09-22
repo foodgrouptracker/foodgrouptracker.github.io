@@ -16,6 +16,7 @@ export function loadUsda() {
           const o = {};
           F.forEach((k, i) => (o[k] = row[i]));
           o.category = raw.categories[o.cat] || "";
+          o.combo = [6, 21, 22, 25].includes(o.cat);
           o.lc = o.desc.toLowerCase();
           return o;
         });
@@ -33,6 +34,15 @@ export function loadUsda() {
 // All words must appear (a word may match a cooking-method synonym). Whole foods rank
 // above branded and processed items; words found in the food's main name rank first.
 const PROCESSED_CATS = new Set([7, 21, 22, 25]); // luncheon meats, fast foods, meals/entrees, restaurant foods
+const MODIFIERS = [
+  [/low ?fat|lowfat|nonfat|non-fat|fat[- ]free|skim/, /low|fat|nonfat|skim|free/],
+  [/\blight\b|\blite\b/, /light|lite/],
+  [/reduced fat|reduced-fat/, /reduced|fat/],
+  [/reduced sugar|sugar[- ]free|no sugar|unsweetened|diet\b/, /reduced|sugar|unsweetened|diet|free/],
+  [/rendered|separable fat|fat only|skin only/, /rendered|separable|only/],
+  [/unsalted|without salt|no salt/, /unsalted|salt/],
+  [/shake|cocoa|homemade|imitation|substitute/, /shake|cocoa|homemade|imitation|substitute/],
+];
 const SYN = {
   baked: ["baked", "dry heat", "roasted"],
   grilled: ["grilled", "broiled", "dry heat"],
@@ -65,6 +75,10 @@ export function rankFoods(foods, query, limit = 30) {
     if (/\b[A-Z]{3,}\b/.test(f.desc)) score += 60;            // brand names in caps
     if (PROCESSED_CATS.has(f.cat) && !words.some((w) => /deli|lunch|fast|restaurant|sliced|frozen|sausage|meal/.test(w))) score += 80;
     if (/evaporated|condensed|\bdry\b|powder|dehydrated|concentrate|reconstituted/.test(f.lc) && !words.some((w) => /evaporated|condensed|dry|powder|dehydrated|concentrate/.test(w))) score += 30;
+    // The plain version of a food ranks above its variants unless the variant was asked for.
+    for (const [inDesc, inQuery] of MODIFIERS) {
+      if (inDesc.test(f.lc) && !words.some((w) => inQuery.test(w))) score += 25;
+    }
     if (f.src === "F") score -= 8;                           // Foundation data is newer
     hits.push([score, f]);
   }
@@ -76,8 +90,25 @@ export function searchUsda(query, limit = 30) {
 }
 
 // Conversion options for a portion: foods the lists count by weight get 1 oz = 1 Meat.
-export function convertOpts(food, grams) {
-  return { legume: !!food.legume, ...(food.byWeight ? { meatByWeightOz: grams / 28.35 } : {}) };
+export function convertOpts(food, grams, portionLabel = "") {
+  const o = { proteinSeparate: !!(food.sep ?? food.legume) };
+  if (food.byWeight) o.meatByWeightOz = grams / 28.35;
+  if (food.drink) o.noProtein = true;
+  if (food.row === "veg") {
+    const cups = cupsIn(portionLabel);
+    if (cups) o.vegServings = /cooked|boiled|steamed|roasted|baked|sauteed|saut|frozen/.test(food.lc || food.desc.toLowerCase()) ? cups * 2 : cups;
+  }
+  return o;
+}
+
+// "1 cup", "0.5 cup", "1/2 cup, chopped" → cups as a number; 0 when the portion isn't a volume.
+export function cupsIn(label) {
+  const m = String(label).toLowerCase().match(/(\d+\s+\d\/\d|\d\/\d|\d+(?:\.\d+)?)\s*cups?\b/);
+  if (!m) return 0;
+  const t = m[1].trim();
+  if (t.includes(" ")) { const [w, f] = t.split(/\s+/); const [a, b] = f.split("/"); return Number(w) + Number(a) / Number(b); }
+  if (t.includes("/")) { const [a, b] = t.split("/"); return Number(a) / Number(b); }
+  return Number(t);
 }
 
 // Nutrients for a portion of `grams`.

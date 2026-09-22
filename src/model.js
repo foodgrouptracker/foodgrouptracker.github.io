@@ -178,13 +178,18 @@ export function roundBoxes(id, x) {
   return id === "meat" ? Math.floor(x + 0.25) : Math.round(x * 2) / 2;
 }
 
-// Fiber and sodium flags, per serving, using the food lists' thresholds.
-export const FIBER_GOOD_G = 3;
-export const SODIUM_HIGH_MG = 480;
+// Fiber and sodium flags, per serving, following the food lists' key: good source of fiber is
+// more than 3 g; high in sodium is 480 mg or more, except for combination dishes and meals,
+// where it is more than 600 mg.
+const FIBER_GOOD_G = 3;
+const SODIUM_HIGH_MG = 480;
+const SODIUM_HIGH_COMBO_MG = 600;
+export const COMBO_CATS = new Set([6, 21, 22, 25]); // soups/sauces, fast foods, meals/entrees, restaurant foods
 export function tagsFor(food) {
   const t = [];
-  if (food.fiber != null && Number(food.fiber) >= FIBER_GOOD_G) t.push("Good source of fiber");
-  if (food.sodium != null && Number(food.sodium) >= SODIUM_HIGH_MG) t.push("High in sodium");
+  if (food.fiber != null && Number(food.fiber) > FIBER_GOOD_G) t.push("Good source of fiber");
+  const combo = !!food.combo || (food.cat != null && COMBO_CATS.has(Number(food.cat)));
+  if (food.sodium != null && (combo ? Number(food.sodium) > SODIUM_HIGH_COMBO_MG : Number(food.sodium) >= SODIUM_HIGH_MG)) t.push("High in sodium");
   return t;
 }
 
@@ -195,22 +200,44 @@ export function deriveFromLabel(m, carbRow, opts = {}) {
   const fat = Math.max(0, Number(m.fat) || 0);
   const per = { starch: 0, fruit: 0, milk: 0, veg: 0, meat: 0, fat: 0, water: 0 };
   const steps = [];
+
+  // Non-starchy vegetables are counted by volume in the food lists: 1 cup raw or ½ cup cooked is one
+  // serving, whatever the carbohydrate. When the portion is a known volume, use that.
+  if (carbRow === "veg" && opts.vegServings) {
+    per.veg = opts.vegServings;
+    steps.push(`${fmt(opts.vegServings)} Vegetable by volume (1 cup raw or ½ cup cooked = 1 serving)`);
+    if (fat >= 2.5) per.fat = fat / 5;
+    return { per, steps, free: false };
+  }
+
+  // Plant milks (soy, almond, rice, oat, coconut): carbohydrate + fat choices in the lists; protein not counted.
+  const noProtein = !!opts.noProtein;
+
   if (carb < 5 && protein < 3 && fat < 2) return { per, steps: ["Under 5 g carb, 3 g protein and 2 g fat: counts as a free food, no box."], free: true };
 
   const row = CARB_ROWS.find((r) => r.id === carbRow) || CARB_ROWS[0];
-  let proteinLeft = protein;
+  let proteinLeft = noProtein ? 0 : protein;
   let fatAllowance = 0;
 
-  // Milk / Yogurt: a serving is defined by calories at the food's fat level (fat-free 100,
-  // reduced-fat 120, whole 160), which is how the food lists treat dairy. Protein and any
-  // added sugar are inside that count; sweetened yogurt simply comes out as more servings.
+  // Milk / Yogurt. The food lists define a dairy serving as about 12 g carbohydrate and 8 g protein
+  // at a fat level (fat-free 100 kcal, reduced-fat 120, whole 160). We take the smaller of
+  // "servings by protein" and "servings by calories": that gives plain milk and yogurt 1, keeps
+  // high-protein Greek yogurt at 1, and lets sweetened dairy (chocolate milk, fruit yogurt) show
+  // its added sugar as a carbohydrate serving, exactly as the lists do ("1 milk + 1 carb").
   if (row.id === "milk" && (protein >= 2 || carb >= 3)) {
     const kcal = 4 * carb + 4 * protein + 9 * fat;
     const fatShare = kcal ? (9 * fat) / kcal : 0;
     const tier = fatShare < 0.15 ? 100 : fatShare < 0.42 ? 120 : 160;
     const tierFat = tier === 100 ? 0.5 : tier === 120 ? 5 : 8;
-    per.milk = kcal / tier;
-    steps.push(`${Math.round(kcal)} calories ÷ ${tier} (${tier === 100 ? "fat-free" : tier === 120 ? "reduced-fat" : "whole"} dairy) = ${fmt(per.milk)} Milk/Yogurt`);
+    const byProtein = protein / 8;
+    const byKcal = kcal / tier;
+    per.milk = protein >= 2 ? Math.min(byProtein, byKcal) : byKcal;
+    steps.push(`Dairy at the ${tier === 100 ? "fat-free" : tier === 120 ? "reduced-fat" : "whole"} level: ${fmt(per.milk)} Milk/Yogurt (${fmt(byProtein)} by protein, ${fmt(byKcal)} by calories)`);
+    const extraCarb = Math.max(0, carb - 12 * per.milk);
+    if (extraCarb >= 7.5) {
+      per.starch = extraCarb / 15;
+      steps.push(`${fmt(extraCarb)} g carb beyond the dairy serving ÷ 15 = ${fmt(per.starch)} Starch (added sugar)`);
+    }
     const extraFat = Math.max(0, fat - tierFat * per.milk);
     if (extraFat >= 2.5) {
       per.fat = extraFat / 5;
@@ -222,9 +249,10 @@ export function deriveFromLabel(m, carbRow, opts = {}) {
   if (carb >= 3) {
     per[row.id] = carb / row.g;
     steps.push(`${carb} g carb ÷ ${row.g} = ${fmt(per[row.id])} ${ROW_LABEL[row.id]}`);
-    // Legumes are the food lists' exception: beans count as starch AND protein, so their
-    // protein is not folded into the starch serving.
-    const allowance = opts.legume && row.id === "starch" ? 0 : PROTEIN_IN_ROW[row.id];
+    // Beans, combination dishes, soups and restaurant food: the lists count protein separately
+    // from the carbohydrate serving. Grains and breads keep their protein inside the starch.
+    const separate = opts.proteinSeparate || opts.legume;
+    const allowance = separate && row.id === "starch" ? 0 : PROTEIN_IN_ROW[row.id];
     const inRow = Math.min(proteinLeft, allowance * per[row.id]);
     if (inRow > 0) {
       proteinLeft -= inRow;
@@ -235,11 +263,11 @@ export function deriveFromLabel(m, carbRow, opts = {}) {
   if (opts.meatByWeightOz) {
     // Meat, poultry, fish, and cheese: the food lists count 1 oz cooked = 1 serving.
     per.meat = opts.meatByWeightOz;
-    fatAllowance += 5 * per.meat;
+    fatAllowance += 8 * per.meat; // a protein serving carries up to 8 g fat (the high-fat level) before Fat is counted
     steps.push(`${fmt(opts.meatByWeightOz)} oz by weight = ${fmt(per.meat)} Meat (1 oz = 1 serving)`);
   } else if (proteinLeft >= 3) {
     per.meat = proteinLeft / 7;
-    fatAllowance += 5 * per.meat; // a medium-fat protein serving carries about 5 g fat
+    fatAllowance += 8 * per.meat; // a protein serving carries up to 8 g fat (the high-fat level) before Fat is counted
     steps.push(`${fmt(proteinLeft)} g protein ÷ 7 = ${fmt(per.meat)} Meat`);
   } else if (proteinLeft > 0) {
     steps.push(`${fmt(proteinLeft)} g protein left over, under 3 g: no Meat box`);

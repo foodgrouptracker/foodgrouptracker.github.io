@@ -62,8 +62,8 @@ export const TOPICS = [
     id: "label",
     title: "How the app reads a label",
     body: [
-      "The food groups are defined by nutrients, and that's what the app uses. About 15 grams of carbohydrate is one Starch or one Fruit serving; a dairy serving is measured by its calories at its fat level; about 5 grams of carbohydrate is one Vegetable serving; about 7 grams of protein is one Meat serving; about 5 grams of fat is one Fat serving. Small amounts of everything count as a free food with no box.",
-      "Protein that comes with a carbohydrate food (like the protein in bread) is part of that serving, not an extra Meat. Fat that comes with a protein food is part of that serving, not an extra Fat. Meat, poultry, fish, and cheese are counted by weight: one ounce is one serving, the same rule dietitians use.",
+      "The food groups are defined by nutrients, and that's what the app uses. About 15 grams of carbohydrate is one Starch or one Fruit serving; a dairy serving is about 8 grams of protein and 12 grams of carbohydrate at its fat level, with any added sugar counted as a Starch; a non-starchy vegetable serving is 1 cup raw or ½ cup cooked; about 7 grams of protein is one Meat serving; about 5 grams of fat is one Fat serving. Small amounts of everything count as a free food with no box.",
+      "Protein that comes with a grain (like the protein in bread or pasta) is part of that serving, not an extra Meat; in beans, soups, and mixed dishes it counts separately, as the food lists do. Fat that comes with a protein food, up to the high-fat level, is part of that serving, not an extra Fat. Meat, poultry, fish, and cheese are counted by weight: one ounce is one serving, the same rule dietitians use.",
       "The one thing you decide is which row the carbohydrate belongs in. The app suggests one; change it if it guessed wrong.",
       "Boxes are rounded to the nearest half. Meat rounds down unless it's very close to the next box. Two reasonable methods can differ by half a serving now and then; either is fine.",
     ],

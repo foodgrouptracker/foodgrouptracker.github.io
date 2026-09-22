@@ -305,14 +305,14 @@ function SearchTab({ q, setQ, openId, setOpenId, grams, setGrams, history, onPic
 }
 
 // Per-portion boxes for a USDA food.
-function boxesText(food, g) {
+function boxesText(food, g, label = "") {
   const m = macrosFor(food, g);
-  const { per } = deriveFromLabel(m, food.row, convertOpts(food, g));
+  const { per } = deriveFromLabel(m, food.row, convertOpts(food, g, label));
   const parts = GROUPS.filter((gr) => roundBoxes(gr.id, per[gr.id] || 0) > 0).map((gr) => `${halfText(roundBoxes(gr.id, per[gr.id]))} ${gr.label.split(" /")[0]}`);
   return parts.length ? parts.join(", ") : "free food";
 }
 function usdaPick(food, label, g) {
-  return { name: food.desc, desc: food.desc, serving: `${label} (${Math.round(g)} g)`, grams: g, macros: macrosFor(food, g), carbRow: food.row, opts: convertOpts(food, g), fdcId: food.id };
+  return { name: food.desc, desc: food.desc, serving: `${label} (${Math.round(g)} g)`, grams: g, macros: macrosFor(food, g), carbRow: food.row, opts: convertOpts(food, g, label), fdcId: food.id, combo: !!food.combo };
 }
 
 export function UsdaResults({ hits, openId, setOpenId, grams, setGrams, onPick }) {
@@ -355,7 +355,7 @@ export function UsdaResults({ hits, openId, setOpenId, grams, setGrams, onPick }
                         <span className="font-bold">{p.label}</span> <span style={{ color: T.muted }}>· {Math.round(p.g)} g</span>
                       </span>
                       <span className="shrink-0 flex items-center gap-1 text-xs" style={{ color: T.accentDeep }}>
-                        {boxesText(f, p.g)}
+                        {boxesText(f, p.g, p.label)}
                         <ChevronRight size={14} aria-hidden="true" />
                       </span>
                     </button>
@@ -498,7 +498,7 @@ export function NewFoodForm({ counts, targets, onDone, initial = null }) {
     carbRow: row,
     fiber: macros.fiber === "" ? null : Number(macros.fiber),
     sodium: macros.sodium === "" ? null : Number(macros.sodium),
-    ...(usda ? { fdcId: initial.fdcId, opts } : {}),
+    ...(usda ? { fdcId: initial.fdcId, opts, combo: !!initial.combo } : {}),
   };
   const inputStyle = { border: `1px solid ${T.hair}`, background: T.surface, color: T.ink };
 

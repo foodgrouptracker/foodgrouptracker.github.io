@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "calibrate": "node tools/calibrate.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
